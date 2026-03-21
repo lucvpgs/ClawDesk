@@ -4,6 +4,34 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
+## [0.5.0] — 2026-03-22
+
+### Added
+- **Tauri desktop app** — ClawDesk is now a native macOS `.app`; the Next.js server runs embedded, no `pnpm dev` needed
+- **Auto-login** — WKWebView window is logged in automatically via a one-time token; no password prompt in the desktop app
+- **Single instance** — second launch focuses the existing window instead of opening a duplicate (`tauri-plugin-single-instance`)
+- **Auto-setup on first launch** — if OpenClaw is running locally, ClawDesk provisions the runtime source automatically without going through onboarding
+- **Auto-sync on startup** — Overview triggers a runtime sync once per session so agents and sessions are always fresh
+- **`cli-env.ts`** — centralised PATH helper (`/opt/homebrew/bin:/usr/local/bin`) for all `execSync` calls; fixes `openclaw` CLI not found in Tauri's minimal environment
+- **`/api/runtime-sources/auto-setup`** — scans for local OpenClaw and provisions it silently on first launch
+- **Smoke test script** — `scripts/smoke-test-bundle.mjs` validates the standalone bundle in an isolated temp dir (6 endpoints)
+
+### Fixed
+- **White screen on launch** — `outputFileTracingIncludes` in `next.config.ts` force-bundles pnpm-symlinked packages (`styled-jsx`, `@swc/helpers`, `@next/env`, `bindings`, `file-uri-to-path`) that Next.js file tracer missed
+- **WKWebView cookie on redirect** — `Set-Cookie` headers dropped by WKWebView on 3xx responses; `/api/auth/tauri` now returns an HTML page with `window.location.replace("/")` instead of `NextResponse.redirect()`
+- **`openclaw` CLI not found** — Tauri starts Node with a minimal PATH; all `execSync` calls now use `cliEnv()` to add homebrew paths
+- **`.env.local` not loaded in production** — `lib.rs` now parses `.env.local` from the app data dir and passes `CLAWDESK_PASSWORD`/`CLAWDESK_SECRET` to the Node server process; default file is seeded on first launch
+- **Channels page empty** — channels API now falls back to live health data when the DB cache is empty; `probe.ok: true` treated as "running" in the UI
+- **Discord alert false positive in Schedules** — `probe.ok: true` is now treated as running regardless of the WebSocket `running` field
+- **Timestamp "2h ago" bug** — SQLite `datetime('now')` returns UTC without a timezone marker; `timeAgo()` now appends `Z` before parsing so the diff is correct for all timezones
+- **`/api/*` routes required auth** — API routes are now public (local-only server on `127.0.0.1`); agents can call the API without a browser cookie
+
+### Changed
+- **Installation** — use `ditto` instead of `cp -R` to copy `.app` bundles (preserves code signatures); follow with `codesign --force --deep --sign -`
+- **README** — completely rewritten to reflect desktop app installation and agent integration
+
+---
+
 ## [0.4.0] — 2026-03-21
 
 ### Added
