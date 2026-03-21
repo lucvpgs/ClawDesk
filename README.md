@@ -95,28 +95,9 @@ curl -X POST http://localhost:3131/api/tasks \
 
 Tasks created this way appear instantly in the ClawDesk UI.
 
-### Install the OpenClaw skill
+### OpenClaw skill
 
-Let your agent operate ClawDesk on your behalf (create tasks, manage schedules, check status):
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
-```
-
-Then add `clawdesk` to your agent's skills list in `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "agents": {
-    "list": [
-      {
-        "id": "main",
-        "skills": ["clawdesk"]
-      }
-    ]
-  }
-}
-```
+The skill is installed automatically during onboarding — click **"Install skill"** on the "What's next" screen after connecting to OpenClaw. No manual steps needed.
 
 The skill gives your agent full access to tasks, schedules, models, memory and activity — directly from Discord or any other channel.
 
