@@ -53,35 +53,50 @@ fn standalone_dir(app: &tauri::AppHandle) -> PathBuf {
 }
 
 /// Working directory for the node process.
-/// Must be the project root so that `process.cwd()` in Next.js resolves
-/// `data/clawdesk.db` to the same place as `pnpm dev`.
-fn server_cwd() -> PathBuf {
+/// Dev: project root — so `process.cwd()/data/` resolves the same DB as `pnpm dev`.
+/// Release: standalone dir — CLAWDESK_DATA_DIR takes over DB placement.
+fn server_cwd(app: &tauri::AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .to_path_buf()
     } else {
-        // release: cwd = standalone dir (CLAWDESK_DATA_DIR set in Stage 5
-        // will override the DB location anyway)
+        standalone_dir(app)
+    }
+}
+
+/// Resolve the data directory:
+/// - dev  → project root / data/   (same as `pnpm dev`, preserves existing DB)
+/// - prod → ~/Library/Application Support/com.vpgs.clawdesk/
+fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
+    if cfg!(debug_assertions) {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
-            .join(".next/standalone")
+            .join("data")
+    } else {
+        app.path()
+            .app_data_dir()
+            .unwrap_or_else(|_| PathBuf::from("data"))
     }
 }
 
 // ── Server lifecycle ─────────────────────────────────────────────────────────
 
-fn start_server(app: &tauri::AppHandle) -> std::io::Result<Child> {
+fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<Child> {
     let dir = standalone_dir(app);
-    let cwd = server_cwd();
+    let cwd = server_cwd(app);
     let node = find_node();
     let script = dir.join("server.js");
 
     println!("[clawdesk] node   = {node}");
     println!("[clawdesk] script = {}", script.display());
     println!("[clawdesk] cwd    = {}", cwd.display());
+    println!("[clawdesk] data   = {}", data_dir.display());
+
+    // Ensure data directory exists before the server tries to open the DB
+    std::fs::create_dir_all(data_dir)?;
 
     Command::new(&node)
         .arg(&script)
@@ -89,6 +104,7 @@ fn start_server(app: &tauri::AppHandle) -> std::io::Result<Child> {
         .env("PORT", PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
         .env("NODE_ENV", "production")
+        .env("CLAWDESK_DATA_DIR", data_dir)
         .spawn()
 }
 
@@ -121,13 +137,16 @@ fn stop_server() {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // ── Data directory ────────────────────────────────────────────
+            let data_dir = resolve_data_dir(app.handle());
+
             // ── Server start (skip if port already in use) ────────────────
             // This allows `pnpm tauri:dev` to co-exist with `pnpm dev`:
             // if port 3131 is already bound, Tauri attaches to that server.
             let port_free = TcpStream::connect(format!("127.0.0.1:{PORT}")).is_err();
 
             if port_free {
-                match start_server(app.handle()) {
+                match start_server(app.handle(), &data_dir) {
                     Ok(child) => {
                         *SERVER.lock().unwrap() = Some(child);
                         wait_for_server();

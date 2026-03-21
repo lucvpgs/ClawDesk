@@ -3,7 +3,11 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import path from "path";
 import * as schema from "./schema";
 
-const DB_PATH = path.join(process.cwd(), "data", "clawdesk.db");
+// CLAWDESK_DATA_DIR is set by the Tauri wrapper so the DB lives in the OS
+// app-data directory (e.g. ~/Library/Application Support/ClawDesk/).
+// Falls back to <cwd>/data/ for plain `pnpm dev` usage.
+const dataDir = process.env.CLAWDESK_DATA_DIR ?? path.join(process.cwd(), "data");
+const DB_PATH = path.join(dataDir, "clawdesk.db");
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
