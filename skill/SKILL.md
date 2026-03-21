@@ -3,7 +3,7 @@ name: clawdesk
 description: >
   Operate the ClawDesk Mission Control application on behalf of the user.
   Use this skill whenever the user asks you to manage tasks, projects, schedules
-  (cron jobs), models, integrations, settings, or wants a status report about
+  (cron jobs), channels, models, integrations, settings, or wants a status report about
   the system.
 ---
 
@@ -57,10 +57,11 @@ Proceed without asking:
 Brief summary before proceeding:
 - Bulk operations
 - Enabling / disabling cron jobs
-- Adding models or integrations
+- Adding models, channels or integrations
 
 Always ask before:
 - Deleting cron jobs permanently
+- Removing channels
 - Changing the primary model
 - Modifying openclaw.json gateway settings
 
@@ -101,9 +102,11 @@ POST /api/schedules/config           ← create
 PATCH /api/schedules/config/<id>     ← update
 DELETE /api/schedules/config/<id>    ← delete
 POST /api/schedules  { action: "run", jobId }   ← trigger manually
+GET  /api/schedules/<id>/runs        ← last 10 run entries for a specific job
+GET  /api/cron/runs                  ← recent runs across all jobs + failedCount
 ```
 
-Create payload:
+Create / update payload:
 ```json
 {
   "name": "Daily summary",
@@ -116,7 +119,38 @@ Create payload:
 }
 ```
 
+Run history entry fields: `status` · `startedAt` · `finishedAt` · `durationMs` · `output` · `error`
+
 Common schedules: `0 9 * * *` (daily 9am) · `0 18 * * 1-5` (weekdays 6pm) · `0 10 * * 7` (sunday 10am)
+
+---
+
+## Channels
+
+```
+GET    /api/channels              ← list configured channels with live status
+POST   /api/channels/add          ← add or update a channel
+DELETE /api/channels/remove       ← remove a channel
+```
+
+Add channel payload:
+```json
+{
+  "channel": "discord",       // discord | telegram | slack | googlechat
+  "name": "My Discord",       // optional display name
+  "token": "...",             // discord / telegram bot token
+  "botToken": "xoxb-...",     // slack only
+  "appToken": "xapp-...",     // slack only
+  "webhookUrl": "https://..."  // googlechat only
+}
+```
+
+Remove channel payload:
+```json
+{ "channel": "discord" }
+```
+
+Channel status fields: `channelType` · `running` · `configured` · `lastError` · `probe.ok` · `probe.elapsedMs`
 
 ---
 
@@ -173,6 +207,15 @@ Journal format:
 ```
 
 Files stored at `~/.openclaw/workspace/memory/YYYY-MM-DD.md` — visible in ClawDesk → Memory page.
+
+---
+
+## Skill management
+
+```
+GET  /api/skill/status   ← check if ClawDesk skill is installed and which agents have it
+POST /api/skill/install  ← install SKILL.md + add "clawdesk" to primary agent's skills list
+```
 
 ---
 

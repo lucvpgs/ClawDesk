@@ -4,7 +4,24 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
-## [Unreleased]
+## [0.4.0] — 2026-03-21
+
+### Added
+- **Channel management** — Settings → Channels now has an "Add channel" button with a modal supporting Discord, Telegram, Slack and Google Chat; each type shows dynamic fields with inline hints; uses `openclaw channels add` CLI under the hood
+- **Remove channel** — trash icon on each channel card with double-click confirmation; uses `openclaw channels remove --delete`
+- **Run history per job** — collapsible "Run history" section in the cron job detail panel; shows last 10 runs with status badge, duration, timestamp and expandable output/error preview
+- **Delivery channel validation** — when selecting Discord/Telegram/Slack on a cron job, ClawDesk checks if that channel is configured and running; shows ✓ green / ⚠ amber / ✗ red with a link to Settings if missing; applies to both create and edit modals
+- **Upcoming schedules widget** — Overview Schedules panel now sorts jobs by `nextRunAt` ascending and shows countdowns (`in 3m`, `in 2h`, `in 1d`); jobs firing in under 5 minutes get an amber highlight
+- **Skill auto-install in onboarding** — "Next steps" screen now has an "Install skill" button instead of a copy-paste command; checks existing status, installs `SKILL.md` and adds `clawdesk` to the agent's skills list in `openclaw.json` automatically
+- **`/api/skill/install`** — copies `skill/SKILL.md` to `~/.openclaw/workspace/skills/clawdesk/` and patches the primary agent's skills list
+- **`/api/skill/status`** — returns whether the skill file exists and which agents have it enabled
+- **`/api/schedules/[id]/runs`** — per-job run history via `openclaw cron runs --id <id>`
+- **`/api/channels/add`** and **`/api/channels/remove`** — add/remove chat channels via CLI
+
+### Fixed
+- Gateway status flickering in Overview — replaced 2s HTTP timeout with `openclaw status --json` CLI check (primary) + HTTP fallback at 4s + one retry; frontend now shows "Checking…" on first failure and only flips to "Offline" after two consecutive failures
+- `CreateScheduleModal` was using the old delivery section without channel validation; now uses the same `DeliverySection` component as the edit panel
+- Agent card emoji was hardcoded for specific agent IDs; now reads from `identity.emoji` in config
 
 ---
 
