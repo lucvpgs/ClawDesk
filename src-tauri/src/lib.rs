@@ -10,6 +10,7 @@ use tauri::{
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_single_instance;
+use tauri_plugin_updater::UpdaterExt;
 
 const PORT: u16 = 3131;
 
@@ -193,12 +194,51 @@ fn stop_server() {
 
 // ── Tauri app ────────────────────────────────────────────────────────────────
 
+/// Check GitHub for a newer version. Returns { available, version, notes } or { available: false }.
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let updater = app.updater_builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    match updater.check().await {
+        Ok(Some(update)) => Ok(serde_json::json!({
+            "available": true,
+            "version": update.version,
+            "currentVersion": update.current_version,
+            "notes": update.body.unwrap_or_default(),
+        })),
+        Ok(None) => Ok(serde_json::json!({ "available": false })),
+        Err(e) => Ok(serde_json::json!({ "available": false, "error": e.to_string() })),
+    }
+}
+
+/// Download and install update, then restart.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater_builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let update = updater.check().await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No update available".to_string())?;
+
+    update.download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+
+    app.restart();
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // A second instance was launched — focus the existing window instead
             show_window(app);
         }))
+        .invoke_handler(tauri::generate_handler![check_update, install_update])
         .setup(|app| {
             // ── Data directory ────────────────────────────────────────────
             let data_dir = resolve_data_dir(app.handle());
