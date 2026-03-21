@@ -873,46 +873,12 @@ function CreateScheduleModal({
           </div>
 
           {/* Delivery */}
-          <div className="space-y-2">
-            <label className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
-              <Radio className="w-3 h-3" /> Delivery <span className="text-zinc-700 normal-case">(optional)</span>
-            </label>
-            <div className="flex gap-2">
-              <select
-                className="w-28 shrink-0 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none"
-                value={outputTarget || "none"}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setOutputTarget(v === "none" ? "" : v);
-                  if (v === "none") setDeliveryTo("");
-                }}
-              >
-                <option value="none">None</option>
-                <option value="discord">Discord</option>
-                <option value="telegram">Telegram</option>
-                <option value="slack">Slack</option>
-              </select>
-              <input
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500 font-mono disabled:opacity-40"
-                value={deliveryTo}
-                onChange={(e) => setDeliveryTo(e.target.value)}
-                placeholder={
-                  outputTarget === "telegram" ? "Telegram chat ID" :
-                  outputTarget === "discord"  ? "Discord channel ID" :
-                  "Channel ID / destination"
-                }
-                disabled={!outputTarget || outputTarget === "none"}
-              />
-            </div>
-            {outputTarget === "discord" && deliveryTo && (
-              <p className="text-[10px] text-zinc-600 font-mono">→ discord · {deliveryTo}</p>
-            )}
-            {outputTarget === "discord" && !deliveryTo && (
-              <p className="text-[10px] text-zinc-600">
-                Right-click channel in Discord → Copy Channel ID
-              </p>
-            )}
-          </div>
+          <DeliverySection
+            outputTarget={outputTarget}
+            deliveryTo={deliveryTo}
+            onTargetChange={(v) => { setOutputTarget(v); if (!v) setDeliveryTo(""); }}
+            onDeliveryToChange={setDeliveryTo}
+          />
         </div>
 
         <div className="px-6 py-4 border-t border-zinc-800 flex gap-2 sticky bottom-0 bg-zinc-950">
