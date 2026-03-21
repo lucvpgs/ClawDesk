@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, Search, CheckCircle, XCircle, Loader2, ChevronRight, Terminal, Bot, CalendarClock } from "lucide-react";
+import { Zap, Search, CheckCircle, XCircle, Loader2, ChevronRight, Bot, CalendarClock, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScanResult } from "@/types";
 
 type Step = "scan" | "confirm" | "manual" | "connecting" | "done" | "next" | "error";
+type SkillState = "idle" | "checking" | "installing" | "done" | "already" | "error";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -15,6 +16,11 @@ export default function OnboardingPage() {
   const [form, setForm] = useState({ name: "", gatewayUrl: "", authToken: "", cliBinary: "" });
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Skill install state
+  const [skillState, setSkillState] = useState<SkillState>("idle");
+  const [skillAgentName, setSkillAgentName] = useState<string | null>(null);
+  const [skillError, setSkillError] = useState("");
 
   // Auto-scan on mount
   useEffect(() => {
@@ -39,6 +45,23 @@ export default function OnboardingPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
+  // Check skill status when "next" step is shown
+  useEffect(() => {
+    if (step !== "next") return;
+    setSkillState("checking");
+    fetch("/api/skill/status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.fullyInstalled) {
+          setSkillAgentName(data.agentsWithSkill?.[0] ?? null);
+          setSkillState("already");
+        } else {
+          setSkillState("idle");
+        }
+      })
+      .catch(() => setSkillState("idle"));
+  }, [step]);
+
   async function connect() {
     setIsLoading(true);
     setStep("connecting");
@@ -60,6 +83,25 @@ export default function OnboardingPage() {
       setStep("error");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function installSkill() {
+    setSkillState("installing");
+    setSkillError("");
+    try {
+      const res = await fetch("/api/skill/install", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSkillError(data.error ?? "Install failed");
+        setSkillState("error");
+      } else {
+        setSkillAgentName(data.agentName ?? null);
+        setSkillState("done");
+      }
+    } catch (e) {
+      setSkillError(String(e));
+      setSkillState("error");
     }
   }
 
@@ -229,7 +271,7 @@ export default function OnboardingPage() {
               </p>
 
               {/* Step 1 — install skill */}
-              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-lg p-4 space-y-2">
+              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Bot className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   <span className="text-xs font-medium text-zinc-200">Install the ClawDesk skill</span>
@@ -238,12 +280,58 @@ export default function OnboardingPage() {
                 <p className="text-[11px] text-zinc-500">
                   Lets your agent manage tasks, schedules and models directly from chat.
                 </p>
-                <div className="bg-zinc-900 rounded px-3 py-2 flex items-center gap-2">
-                  <Terminal className="w-3 h-3 text-zinc-600 shrink-0" />
-                  <code className="text-[10px] text-zinc-400 font-mono break-all">
-                    bash &lt;(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
-                  </code>
-                </div>
+
+                {/* Idle / checking */}
+                {(skillState === "idle" || skillState === "checking") && (
+                  <button
+                    onClick={installSkill}
+                    disabled={skillState === "checking"}
+                    className="w-full px-3 py-2 text-xs font-medium bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-md transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {skillState === "checking" ? (
+                      <><Loader2 className="w-3 h-3 animate-spin" /> Checking...</>
+                    ) : (
+                      <><Download className="w-3 h-3" /> Install skill</>
+                    )}
+                  </button>
+                )}
+
+                {/* Installing */}
+                {skillState === "installing" && (
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                    <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
+                    Installing skill...
+                  </div>
+                )}
+
+                {/* Done */}
+                {(skillState === "done" || skillState === "already") && (
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-emerald-400">
+                      {skillState === "already" ? "Already installed" : "Skill installed"}
+                      {skillAgentName && (
+                        <span className="text-zinc-500"> · enabled for <span className="text-zinc-300">{skillAgentName}</span></span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Error */}
+                {skillState === "error" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-[11px] text-red-400">
+                      <XCircle className="w-3 h-3 shrink-0" /> Install failed
+                    </div>
+                    <p className="text-[10px] text-zinc-600 font-mono">{skillError}</p>
+                    <button
+                      onClick={installSkill}
+                      className="text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-300"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Step 2 — first cron */}
