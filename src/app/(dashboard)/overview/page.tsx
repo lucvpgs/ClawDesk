@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { cn, timeAgo, statusDot } from "@/lib/utils";
 import { useRuntimeStore } from "@/lib/store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -51,11 +51,19 @@ export default function OverviewPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const { setActiveRuntime } = useRuntimeStore();
+  const [alertDismissed, setAlertDismissed] = useState(false);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<OverviewData>({
     queryKey: ["overview"],
     queryFn: () => fetch("/api/overview").then((r) => r.json()),
     refetchInterval: 10_000,
+  });
+
+  const { data: cronRuns } = useQuery<{ runs: unknown[]; failedCount: number }>({
+    queryKey: ["cron-runs"],
+    queryFn: () => fetch("/api/cron/runs").then((r) => r.json()),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -117,6 +125,23 @@ export default function OverviewPage() {
           <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin")} />
         </button>
       </div>
+
+      {/* Cron failure alert */}
+      {!alertDismissed && cronRuns && cronRuns.failedCount > 0 && (
+        <div className="flex items-center gap-3 bg-red-950/30 border border-red-800/50 rounded-lg px-4 py-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <span className="text-xs text-red-300 flex-1">
+            {cronRuns.failedCount} cron job{cronRuns.failedCount > 1 ? "s" : ""} failed recently
+          </span>
+          <Link href="/schedules" className="text-[10px] text-red-400 hover:text-red-300 underline shrink-0">
+            View schedules
+          </Link>
+          <button
+            onClick={() => setAlertDismissed(true)}
+            className="text-red-700 hover:text-red-500 ml-1 shrink-0 text-xs"
+          >✕</button>
+        </div>
+      )}
 
       {/* Status bar — 4 quick indicators */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
