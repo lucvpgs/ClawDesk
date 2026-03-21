@@ -8,7 +8,7 @@ import {
   Radio, CheckCircle2, AlertCircle, Circle,
   Shield, Terminal, Clock, Bot,
   MessageSquare, Search, Hash, Send, GitBranch, FileText, Layers, Webhook,
-  ExternalLink, Eye, EyeOff, X, Save, Trash2, ChevronDown, ChevronUp,
+  ExternalLink, Eye, EyeOff, X, Save, Trash2, ChevronDown, ChevronUp, Loader2,
 } from "lucide-react";
 import { cn, timeAgo, statusDot, statusColor } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
@@ -243,63 +243,126 @@ const CHANNEL_COLOR: Record<string, string> = {
   slack:    "text-yellow-400",
   telegram: "text-blue-400",
   whatsapp: "text-emerald-400",
+  googlechat: "text-green-400",
   sms:      "text-orange-400",
   email:    "text-zinc-300",
 };
 
 const CHANNEL_BG: Record<string, string> = {
-  discord:  "bg-indigo-900/20 border-indigo-800/30",
-  slack:    "bg-yellow-900/20 border-yellow-800/30",
-  telegram: "bg-blue-900/20 border-blue-800/30",
-  whatsapp: "bg-emerald-900/20 border-emerald-800/30",
-  sms:      "bg-orange-900/20 border-orange-800/30",
-  email:    "bg-zinc-900/50 border-zinc-800/50",
+  discord:    "bg-indigo-900/20 border-indigo-800/30",
+  slack:      "bg-yellow-900/20 border-yellow-800/30",
+  telegram:   "bg-blue-900/20 border-blue-800/30",
+  whatsapp:   "bg-emerald-900/20 border-emerald-800/30",
+  googlechat: "bg-green-900/20 border-green-800/30",
+  sms:        "bg-orange-900/20 border-orange-800/30",
+  email:      "bg-zinc-900/50 border-zinc-800/50",
 };
 
+type AddChannelType = "discord" | "telegram" | "slack" | "googlechat";
+
+const ADD_CHANNEL_OPTIONS: { value: AddChannelType; label: string }[] = [
+  { value: "discord",    label: "Discord"     },
+  { value: "telegram",   label: "Telegram"    },
+  { value: "slack",      label: "Slack"       },
+  { value: "googlechat", label: "Google Chat" },
+];
+
 function ChannelsTab() {
+  const queryClient = useQueryClient();
   const { data, isLoading, refetch, isFetching } = useQuery<{ channels: Channel[] }>({
     queryKey: ["channels"],
     queryFn: () => fetch("/api/channels").then((r) => r.json()),
     refetchInterval: 30_000,
   });
 
+  const [showAdd, setShowAdd] = useState(false);
+
   const channels   = data?.channels ?? [];
   const running    = channels.filter((c) => c.running === true).length;
   const configured = channels.filter((c) => c.configured === true).length;
+
+  function handleAdded() {
+    setShowAdd(false);
+    setTimeout(() => queryClient.invalidateQueries({ queryKey: ["channels"] }), 800);
+  }
+
+  function handleRemoved() {
+    setTimeout(() => queryClient.invalidateQueries({ queryKey: ["channels"] }), 800);
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-zinc-500">{running} running · {configured} configured</p>
-        <button
-          onClick={() => refetch()}
-          className={cn(
-            "p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors",
-            isFetching && "animate-spin text-violet-400"
-          )}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-500 text-white rounded-md transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Add channel
+          </button>
+          <button
+            onClick={() => refetch()}
+            className={cn(
+              "p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors",
+              isFetching && "animate-spin text-violet-400"
+            )}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="text-sm text-zinc-500 py-8 text-center">Loading…</div>
       ) : channels.length === 0 ? (
-        <div className="text-sm text-zinc-600 py-12 text-center">No channels synced from runtime.</div>
+        <div className="flex flex-col items-center gap-3 py-12">
+          <p className="text-sm text-zinc-600">No channels configured yet.</p>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-md transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Add your first channel
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {channels.map((ch) => <ChannelCard key={ch.id} channel={ch} />)}
+          {channels.map((ch) => (
+            <ChannelCard key={ch.id} channel={ch} onRemoved={handleRemoved} />
+          ))}
         </div>
+      )}
+
+      {showAdd && (
+        <AddChannelModal onClose={() => setShowAdd(false)} onAdded={handleAdded} />
       )}
     </div>
   );
 }
 
-function ChannelCard({ channel }: { channel: Channel }) {
+function ChannelCard({ channel, onRemoved }: { channel: Channel; onRemoved: () => void }) {
   const type      = channel.channelType.toLowerCase();
   const isRunning = channel.running === true;
   const isCfg     = channel.configured === true;
   const probeOk   = channel.probe?.ok === true;
+  const [removing, setRemoving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  async function handleRemove() {
+    if (!confirmRemove) { setConfirmRemove(true); return; }
+    setRemoving(true);
+    try {
+      await fetch("/api/channels/remove", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: channel.channelType }),
+      });
+      onRemoved();
+    } finally {
+      setRemoving(false);
+      setConfirmRemove(false);
+    }
+  }
 
   return (
     <div className={cn("border rounded-lg overflow-hidden", CHANNEL_BG[type] ?? "bg-zinc-900/50 border-zinc-800/50")}>
@@ -319,13 +382,28 @@ function ChannelCard({ channel }: { channel: Channel }) {
             <span className="text-[10px] text-zinc-600">observed {timeAgo(channel.observedAt)}</span>
           )}
         </div>
-        {isRunning ? (
-          <span className="text-[10px] bg-emerald-900/40 text-emerald-400 border border-emerald-800/50 px-1.5 py-0.5 rounded">running</span>
-        ) : isCfg ? (
-          <span className="text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700/50 px-1.5 py-0.5 rounded">configured</span>
-        ) : (
-          <span className="text-[10px] bg-zinc-900 text-zinc-700 border border-zinc-800 px-1.5 py-0.5 rounded">inactive</span>
-        )}
+        <div className="flex items-center gap-2">
+          {isRunning ? (
+            <span className="text-[10px] bg-emerald-900/40 text-emerald-400 border border-emerald-800/50 px-1.5 py-0.5 rounded">running</span>
+          ) : isCfg ? (
+            <span className="text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700/50 px-1.5 py-0.5 rounded">configured</span>
+          ) : (
+            <span className="text-[10px] bg-zinc-900 text-zinc-700 border border-zinc-800 px-1.5 py-0.5 rounded">inactive</span>
+          )}
+          <button
+            onClick={handleRemove}
+            disabled={removing}
+            title={confirmRemove ? "Click again to confirm" : "Remove channel"}
+            className={cn(
+              "p-1 rounded transition-colors",
+              confirmRemove
+                ? "text-red-400 hover:text-red-300 bg-red-900/30"
+                : "text-zinc-700 hover:text-red-400"
+            )}
+          >
+            {removing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
       </div>
 
       <div className="px-4 py-3 space-y-2">
@@ -340,6 +418,12 @@ function ChannelCard({ channel }: { channel: Channel }) {
             <div className="text-xs text-red-400 break-all">{channel.lastError}</div>
           </div>
         )}
+        {confirmRemove && !removing && (
+          <div className="mt-2 flex items-center justify-between gap-2 bg-red-950/30 border border-red-900/40 rounded px-2.5 py-1.5">
+            <span className="text-[10px] text-red-400">Remove {channel.channelType}?</span>
+            <button onClick={() => setConfirmRemove(false)} className="text-[10px] text-zinc-500 hover:text-zinc-300">Cancel</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -352,6 +436,208 @@ function ChannelRow({ label, value, ok }: { label: string; value: string; ok?: b
       <span className={cn("text-xs font-mono", ok === true ? "text-emerald-400" : ok === false ? "text-red-400" : "text-zinc-400")}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// ── Add Channel Modal ─────────────────────────────────────────────────────────
+function AddChannelModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [channelType, setChannelType] = useState<AddChannelType>("discord");
+  const [name,        setName]        = useState("");
+  const [token,       setToken]       = useState("");
+  const [botToken,    setBotToken]    = useState("");
+  const [appToken,    setAppToken]    = useState("");
+  const [webhookUrl,  setWebhookUrl]  = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState("");
+
+  // Reset fields when channel type changes
+  function handleTypeChange(t: AddChannelType) {
+    setChannelType(t);
+    setToken(""); setBotToken(""); setAppToken(""); setWebhookUrl(""); setError("");
+  }
+
+  const isValid =
+    (channelType === "discord"    && token.trim().length > 0) ||
+    (channelType === "telegram"   && token.trim().length > 0) ||
+    (channelType === "slack"      && botToken.trim().length > 0 && appToken.trim().length > 0) ||
+    (channelType === "googlechat" && webhookUrl.trim().length > 0);
+
+  async function handleAdd() {
+    if (!isValid) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/channels/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: channelType, name, token, botToken, appToken, webhookUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Failed to add channel");
+      } else {
+        onAdded();
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-violet-400" />
+            <span className="text-sm font-semibold text-zinc-100">Add channel</span>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Channel type selector */}
+          <div>
+            <label className="text-xs text-zinc-500 mb-2 block">Channel type</label>
+            <div className="grid grid-cols-4 gap-2">
+              {ADD_CHANNEL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => handleTypeChange(opt.value)}
+                  className={cn(
+                    "px-2 py-2 text-xs rounded-md border transition-colors",
+                    channelType === opt.value
+                      ? "bg-violet-600/20 border-violet-500/50 text-violet-300"
+                      : "bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Display name (optional, all types) */}
+          <div>
+            <label className="text-xs text-zinc-500 mb-1 block">Display name <span className="text-zinc-700">(optional)</span></label>
+            <input
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:border-violet-500"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={`My ${channelType}`}
+            />
+          </div>
+
+          {/* Discord — bot token */}
+          {channelType === "discord" && (
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">Bot token</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 font-mono outline-none focus:border-violet-500"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="MTQ3OTg1..."
+                type="password"
+                autoFocus
+              />
+              <p className="text-[10px] text-zinc-600 mt-1">Discord Developer Portal → Bot → Token</p>
+            </div>
+          )}
+
+          {/* Telegram — bot token */}
+          {channelType === "telegram" && (
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">Bot token</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 font-mono outline-none focus:border-violet-500"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="1234567890:ABC..."
+                type="password"
+                autoFocus
+              />
+              <p className="text-[10px] text-zinc-600 mt-1">Get from @BotFather on Telegram</p>
+            </div>
+          )}
+
+          {/* Slack — bot token + app token */}
+          {channelType === "slack" && (
+            <>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">Bot token <span className="text-zinc-600 font-mono">xoxb-</span></label>
+                <input
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 font-mono outline-none focus:border-violet-500"
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  placeholder="xoxb-..."
+                  type="password"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">App token <span className="text-zinc-600 font-mono">xapp-</span></label>
+                <input
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 font-mono outline-none focus:border-violet-500"
+                  value={appToken}
+                  onChange={(e) => setAppToken(e.target.value)}
+                  placeholder="xapp-..."
+                  type="password"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-600 -mt-2">Slack API → Your App → OAuth &amp; Permissions / App-Level Tokens</p>
+            </>
+          )}
+
+          {/* Google Chat — webhook URL */}
+          {channelType === "googlechat" && (
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">Webhook URL</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 font-mono outline-none focus:border-violet-500"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://chat.googleapis.com/v1/spaces/..."
+                autoFocus
+              />
+              <p className="text-[10px] text-zinc-600 mt-1">Google Chat → Space settings → Apps &amp; Integrations → Webhooks</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-950/30 border border-red-900/40 rounded px-3 py-2 text-xs text-red-400 font-mono break-all">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-800">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 rounded-lg hover:border-zinc-600 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAdd}
+            disabled={!isValid || saving}
+            className={cn(
+              "px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5",
+              isValid && !saving
+                ? "bg-violet-600 hover:bg-violet-500 text-white"
+                : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+            )}
+          >
+            {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…</> : "Add channel"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
