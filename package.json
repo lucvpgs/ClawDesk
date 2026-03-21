@@ -11,7 +11,8 @@
     "db:migrate": "node src/db/migrate.mjs",
     "db:studio": "drizzle-kit studio",
     "tauri:dev": "pnpm tauri dev",
-    "tauri:build": "pnpm tauri build"
+    "tauri:build": "pnpm tauri build",
+    "build:desktop": "next build && node scripts/copy-standalone-assets.mjs"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +30,9 @@
     "tailwind-merge": "^3.5.0",
     "ws": "^8.19.0",
     "zustand": "^5.0.12"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "@tauri-apps/cli"]
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Lock } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const from         = searchParams.get("from") ?? "/";
@@ -45,6 +45,40 @@ export default function LoginPage() {
   }
 
   return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+          <input
+            id="password-input"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-violet-500 transition-colors"
+            autoComplete="current-password"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400 text-center">{error}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading || !password}
+        className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+        {loading ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
@@ -57,36 +91,10 @@ export default function LoginPage() {
           <p className="text-xs text-zinc-500 mt-1">Mission Control</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
-              <input
-                id="password-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-violet-500 transition-colors"
-                autoComplete="current-password"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-xs text-red-400 text-center">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || !password}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+        {/* Form wrapped in Suspense (required by useSearchParams) */}
+        <Suspense fallback={<div className="h-24" />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );

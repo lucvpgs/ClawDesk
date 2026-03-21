@@ -33,3 +33,6 @@ npm-debug.log*
 # Tauri
 src-tauri/target/
 src-tauri/app-icon-source.png
+
+# Next.js standalone build (generated, not committed)
+.next/standalone/
