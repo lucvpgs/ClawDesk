@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/*
+ * Readability overrides for dark UI.
+ * Shifts zinc mid-tones lighter so small text stays legible on zinc-950/900 backgrounds.
+ * Each step bumped ~one full step toward white:
+ *   500: #71717a → #909098   (secondary text, meta)
+ *   600: #52525b → #71717a   (labels, uppercase headers) ← most impactful (180 uses)
+ *   700: #3f3f46 → #52525b   (subtle / muted text, empty states)
+ * Backgrounds (800/900/950) and primary text (100/200/300/400) are untouched.
+ */
+@theme {
+  --color-zinc-500: #909098;
+  --color-zinc-600: #71717a;
+  --color-zinc-700: #52525b;
+}
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #52525b; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #71717a; }
