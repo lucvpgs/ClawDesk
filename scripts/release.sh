@@ -53,10 +53,9 @@ echo "▶ Packing $ASSET..."
 tar -czf "$BUNDLE_DIR/$ASSET" -C "$BUNDLE_DIR" "ClawDesk.app"
 
 echo "▶ Signing..."
-npx @tauri-apps/cli signer sign \
-  -k "$KEY" \
-  --password "" \
-  "$BUNDLE_DIR/$ASSET"
+TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
+  npx @tauri-apps/cli signer sign "$BUNDLE_DIR/$ASSET"
 
 SIG=$(cat "$BUNDLE_DIR/$ASSET.sig")
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
