@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock, Play, RefreshCw, List, Calendar, Plus,
   X, Save, Trash2, AlertCircle, ChevronRight, ToggleLeft, ToggleRight,
-  Clock, Bot, Terminal, Radio,
+  Clock, Bot, Terminal, Radio, CheckCircle2, Loader2, ChevronDown, ChevronUp,
+  History,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { agentAccent, agentDisplayName, agentInitial, KNOWN_AGENTS } from "@/lib/agent-colors";
@@ -693,46 +694,12 @@ function JobDetailPanel({
           </div>
 
           {/* Delivery */}
-          <div className="space-y-2">
-            <label className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
-              <Radio className="w-3 h-3" /> Delivery
-            </label>
-            <div className="flex gap-2">
-              <select
-                className="w-28 shrink-0 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none"
-                value={outputTarget || "none"}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setOutputTarget(v === "none" ? "" : v);
-                  if (v === "none") setDeliveryTo("");
-                }}
-              >
-                <option value="none">None</option>
-                <option value="discord">Discord</option>
-                <option value="telegram">Telegram</option>
-                <option value="slack">Slack</option>
-              </select>
-              <input
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500 font-mono disabled:opacity-40"
-                value={deliveryTo}
-                onChange={(e) => setDeliveryTo(e.target.value)}
-                placeholder={
-                  outputTarget === "telegram" ? "Telegram chat ID" :
-                  outputTarget === "discord"  ? "Discord channel ID" :
-                  "Channel ID / destination"
-                }
-                disabled={!outputTarget || outputTarget === "none"}
-              />
-            </div>
-            {outputTarget === "discord" && !deliveryTo && (
-              <p className="text-[10px] text-amber-500/80">
-                Discord channel ID required — right-click channel → Copy Channel ID
-              </p>
-            )}
-            {deliveryTo && (
-              <p className="text-[10px] text-zinc-600 font-mono">→ {outputTarget} · {deliveryTo}</p>
-            )}
-          </div>
+          <DeliverySection
+            outputTarget={outputTarget}
+            deliveryTo={deliveryTo}
+            onTargetChange={(v) => { setOutputTarget(v); if (!v) setDeliveryTo(""); }}
+            onDeliveryToChange={setDeliveryTo}
+          />
 
           {/* Runtime metadata */}
           <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-lg px-3 py-2.5 space-y-1.5">
@@ -742,6 +709,9 @@ function JobDetailPanel({
             <MetaRow label="Created"   value={timeAgo(job.createdAt) ?? "—"} />
             {job.updatedAt && <MetaRow label="Updated" value={timeAgo(job.updatedAt) ?? "—"} />}
           </div>
+
+          {/* Run history */}
+          <RunHistory jobId={job.id} />
         </div>
 
         {/* Footer */}
@@ -968,6 +938,243 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-start justify-between gap-2">
       <span className="text-[10px] text-zinc-600 shrink-0">{label}</span>
       <span className="text-[10px] text-zinc-400 text-right">{value}</span>
+    </div>
+  );
+}
+
+// ── DeliverySection — with live channel validation ────────────────────────────
+interface ChannelStatus { channelType: string; running: boolean | null; configured: boolean | null; }
+
+function DeliverySection({
+  outputTarget, deliveryTo, onTargetChange, onDeliveryToChange,
+}: {
+  outputTarget: string;
+  deliveryTo: string;
+  onTargetChange: (v: string) => void;
+  onDeliveryToChange: (v: string) => void;
+}) {
+  const { data: channelData } = useQuery<{ channels: ChannelStatus[] }>({
+    queryKey: ["channels"],
+    queryFn: () => fetch("/api/channels").then((r) => r.json()),
+    staleTime: 30_000,
+  });
+
+  const channels = channelData?.channels ?? [];
+
+  function channelStatusFor(type: string): "running" | "configured" | "missing" | null {
+    if (!type || type === "none") return null;
+    const ch = channels.find((c) => c.channelType.toLowerCase() === type.toLowerCase());
+    if (!ch) return "missing";
+    if (ch.running) return "running";
+    if (ch.configured) return "configured";
+    return "missing";
+  }
+
+  const status = channelStatusFor(outputTarget);
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
+        <Radio className="w-3 h-3" /> Delivery
+      </label>
+      <div className="flex gap-2">
+        <select
+          className="w-28 shrink-0 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none"
+          value={outputTarget || "none"}
+          onChange={(e) => onTargetChange(e.target.value === "none" ? "" : e.target.value)}
+        >
+          <option value="none">None</option>
+          <option value="discord">Discord</option>
+          <option value="telegram">Telegram</option>
+          <option value="slack">Slack</option>
+        </select>
+        <input
+          className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500 font-mono disabled:opacity-40"
+          value={deliveryTo}
+          onChange={(e) => onDeliveryToChange(e.target.value)}
+          placeholder={
+            outputTarget === "telegram" ? "Telegram chat ID" :
+            outputTarget === "discord"  ? "Discord channel ID" :
+            outputTarget === "slack"    ? "Slack channel ID"   :
+            "Channel ID / destination"
+          }
+          disabled={!outputTarget || outputTarget === "none"}
+        />
+      </div>
+
+      {/* Channel validation badge */}
+      {status === "running" && (
+        <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+          <CheckCircle2 className="w-3 h-3" />
+          <span className="capitalize">{outputTarget}</span> is configured and running
+        </div>
+      )}
+      {status === "configured" && (
+        <div className="flex items-center gap-1.5 text-[10px] text-amber-400">
+          <AlertCircle className="w-3 h-3" />
+          <span className="capitalize">{outputTarget}</span> is configured but not running
+        </div>
+      )}
+      {status === "missing" && (
+        <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+          <AlertCircle className="w-3 h-3" />
+          <span className="capitalize">{outputTarget}</span> is not configured —{" "}
+          <a href="/settings?tab=channels" className="underline underline-offset-2 hover:text-red-300">
+            add it in Settings
+          </a>
+        </div>
+      )}
+      {status === "running" && outputTarget === "discord" && !deliveryTo && (
+        <p className="text-[10px] text-amber-500/80">
+          Discord channel ID required — right-click channel → Copy Channel ID
+        </p>
+      )}
+      {deliveryTo && (
+        <p className="text-[10px] text-zinc-600 font-mono">→ {outputTarget} · {deliveryTo}</p>
+      )}
+    </div>
+  );
+}
+
+// ── RunHistory — last N runs for a specific job ───────────────────────────────
+interface CronRun {
+  id: string | null;
+  status: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  output: string | null;
+  error: string | null;
+}
+
+function RunHistory({ jobId }: { jobId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
+
+  const { data, isLoading, refetch, isFetching } = useQuery<{ runs: CronRun[]; total: number }>({
+    queryKey: ["job-runs", jobId],
+    queryFn: () => fetch(`/api/schedules/${jobId}/runs`).then((r) => r.json()),
+    enabled: expanded,
+    staleTime: 30_000,
+  });
+
+  const runs = data?.runs ?? [];
+
+  function formatDuration(ms: number | null) {
+    if (ms === null) return null;
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
+  }
+
+  return (
+    <div className="border border-zinc-800/60 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded((p) => !p)}
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-[10px] text-zinc-500 uppercase tracking-wider">
+          <History className="w-3 h-3" /> Run history
+        </div>
+        <div className="flex items-center gap-2">
+          {isFetching && <Loader2 className="w-3 h-3 animate-spin text-violet-400" />}
+          {expanded
+            ? <ChevronUp   className="w-3.5 h-3.5 text-zinc-600" />
+            : <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="divide-y divide-zinc-800/40">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-xs text-zinc-600">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading runs…
+            </div>
+          ) : runs.length === 0 ? (
+            <div className="py-6 text-center text-xs text-zinc-700">
+              No runs recorded yet.
+            </div>
+          ) : (
+            <>
+              {runs.map((run, i) => {
+                const runKey = run.id ?? String(i);
+                const isExpRun = expandedRun === runKey;
+                const isOk = run.status === "ok" || run.status === "success";
+                const isErr = run.status === "error" || run.status === "failed";
+
+                return (
+                  <div key={runKey}>
+                    <button
+                      onClick={() => setExpandedRun(isExpRun ? null : runKey)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-800/30 transition-colors text-left"
+                    >
+                      {/* Status dot */}
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        isOk  ? "bg-emerald-400" :
+                        isErr ? "bg-red-400" :
+                                "bg-zinc-500"
+                      )} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[10px] font-medium uppercase",
+                            isOk  ? "text-emerald-400" :
+                            isErr ? "text-red-400" :
+                                    "text-zinc-400"
+                          )}>
+                            {run.status}
+                          </span>
+                          {run.durationMs !== null && (
+                            <span className="text-[10px] text-zinc-600">
+                              {formatDuration(run.durationMs)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-zinc-600 mt-0.5">
+                          {run.startedAt ? timeAgo(run.startedAt) : "—"}
+                        </div>
+                      </div>
+
+                      {(run.output || run.error) && (
+                        <ChevronRight className={cn(
+                          "w-3 h-3 text-zinc-700 transition-transform shrink-0",
+                          isExpRun && "rotate-90"
+                        )} />
+                      )}
+                    </button>
+
+                    {/* Expanded output */}
+                    {isExpRun && (run.output || run.error) && (
+                      <div className="px-3 pb-3">
+                        <div className={cn(
+                          "rounded px-2.5 py-2 text-[10px] font-mono whitespace-pre-wrap break-all leading-relaxed",
+                          run.error
+                            ? "bg-red-950/30 border border-red-900/40 text-red-400"
+                            : "bg-zinc-900 border border-zinc-800 text-zinc-400"
+                        )}>
+                          {run.error ?? run.output}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Refresh */}
+              <div className="flex justify-end px-3 py-2">
+                <button
+                  onClick={() => refetch()}
+                  className="text-[10px] text-zinc-600 hover:text-zinc-400 flex items-center gap-1"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" /> Refresh
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -23,7 +23,7 @@ interface OverviewData {
   agentList: Array<{ id: string; name?: string; default?: boolean; model?: string; identity?: { emoji?: string } }>;
   agents?: Array<{ id: string; agentId: string; name: string | null; model: string | null; status: string | null }>;
   sessions?: Array<{ sessionId: string; agentId: string | null; status: string | null; channel: string | null }>;
-  cronJobs: Array<{ id: string; name: string | null; schedule: string | null; enabled: boolean; agentId: string | null }>;
+  cronJobs: Array<{ id: string; name: string | null; schedule: string | null; enabled: boolean; agentId: string | null; nextRunAt: string | null }>;
   channels?: Array<{ channelType: string; status: string | null }>;
   recentActivity?: Array<{ id: string; eventType: string; summary: string | null; occurredAt: string }>;
   taskStats: { total: number; pending: number; inProgress: number; blocked: number; done: number };
@@ -255,20 +255,52 @@ export default function OverviewPage() {
           </div>
         </Panel>
 
-        {/* Cron jobs */}
-        <Panel title="Schedules" icon={<CalendarClock className="w-3.5 h-3.5" />} href="/schedules"
+        {/* Cron jobs — next runs */}
+        <Panel title="Upcoming schedules" icon={<CalendarClock className="w-3.5 h-3.5" />} href="/schedules"
           badge={`${enabledCrons.length} active`}>
           {cronJobs.length === 0 ? (
             <EmptyRow label="No cron jobs configured" />
-          ) : (
-            cronJobs.slice(0, 5).map((j) => (
-              <div key={j.id} className="flex items-center gap-2.5 px-4 py-2.5 border-b border-zinc-800/50 last:border-0">
-                <Circle className={cn("w-1.5 h-1.5 shrink-0", j.enabled ? "text-emerald-500 fill-emerald-500" : "text-zinc-700 fill-zinc-700")} />
-                <span className="text-xs text-zinc-200 flex-1 truncate">{j.name ?? j.id}</span>
-                <span className="text-[10px] text-zinc-600 font-mono shrink-0">{j.schedule ?? "—"}</span>
-              </div>
-            ))
-          )}
+          ) : (() => {
+            // Sort enabled jobs by nextRunAt asc, then disabled at the bottom
+            const sorted = [...cronJobs].sort((a, b) => {
+              if (!a.enabled && b.enabled) return 1;
+              if (a.enabled && !b.enabled) return -1;
+              if (!a.nextRunAt && !b.nextRunAt) return 0;
+              if (!a.nextRunAt) return 1;
+              if (!b.nextRunAt) return -1;
+              return new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime();
+            });
+            return sorted.slice(0, 5).map((j) => {
+              const nextMs = j.nextRunAt ? new Date(j.nextRunAt).getTime() - Date.now() : null;
+              const nextLabel = nextMs !== null
+                ? nextMs < 60_000   ? "< 1 min"
+                : nextMs < 3600_000 ? `${Math.round(nextMs / 60_000)}m`
+                : nextMs < 86400_000 ? `${Math.round(nextMs / 3600_000)}h`
+                : `${Math.round(nextMs / 86400_000)}d`
+                : null;
+              const isSoon = nextMs !== null && nextMs < 300_000; // < 5 min
+
+              return (
+                <div key={j.id} className="flex items-center gap-2.5 px-4 py-2.5 border-b border-zinc-800/50 last:border-0">
+                  <Circle className={cn("w-1.5 h-1.5 shrink-0", j.enabled ? "text-emerald-500 fill-emerald-500" : "text-zinc-700 fill-zinc-700")} />
+                  <span className="text-xs text-zinc-200 flex-1 truncate">{j.name ?? j.id}</span>
+                  {j.enabled && nextLabel ? (
+                    <span className={cn(
+                      "text-[10px] shrink-0 font-mono",
+                      isSoon ? "text-amber-400" : "text-zinc-500"
+                    )}>
+                      {isSoon && <Clock className="w-2.5 h-2.5 inline mr-0.5 -mt-0.5" />}
+                      in {nextLabel}
+                    </span>
+                  ) : j.enabled ? (
+                    <span className="text-[10px] text-zinc-600 shrink-0 font-mono">{j.schedule ?? "—"}</span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-700 shrink-0">disabled</span>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </Panel>
 
         {/* Activity + channels */}

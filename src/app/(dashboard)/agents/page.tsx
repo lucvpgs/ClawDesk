@@ -108,6 +108,7 @@ export default function AgentsPage() {
               <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">Principal Agent</div>
               <AgentCard
                 agent={mainAgent}
+                config={configs.find((c) => c.id === mainAgent.agentId)}
                 isPrincipal
                 onSelect={() => setSelectedId(mainAgent.agentId)}
                 selected={selectedId === mainAgent.agentId}
@@ -125,6 +126,7 @@ export default function AgentsPage() {
                   <AgentCard
                     key={agent.id}
                     agent={agent}
+                    config={configs.find((c) => c.id === agent.agentId)}
                     isPrincipal={false}
                     onSelect={() => setSelectedId(agent.agentId)}
                     selected={selectedId === agent.agentId}
@@ -162,15 +164,16 @@ export default function AgentsPage() {
 
 // ── Agent Card ────────────────────────────────────────────────────────────────
 function AgentCard({
-  agent, isPrincipal, onSelect, selected,
+  agent, config, isPrincipal, onSelect, selected,
 }: {
   agent: AgentData;
+  config?: AgentConfig;
   isPrincipal: boolean;
   onSelect: () => void;
   selected: boolean;
 }) {
   const accent = agentAccent(agent.agentId);
-  const emoji  = agent.agentId === "meridian" ? "🧭" : agent.agentId === "test" ? "🧑‍💻" : null;
+  const emoji  = config?.identity?.emoji ?? null;
 
   return (
     <div

@@ -49,7 +49,7 @@ function readCronJobs() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return jobs.map((j: any) => {
       const n = normalizeCronJob(j);
-      return { id: n.id, name: n.name, schedule: n.schedule, enabled: n.enabled, agentId: n.agentId };
+      return { id: n.id, name: n.name, schedule: n.schedule, enabled: n.enabled, agentId: n.agentId, nextRunAt: n.nextRunAt ?? null };
     });
   } catch { return []; }
 }
