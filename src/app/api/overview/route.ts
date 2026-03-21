@@ -6,6 +6,7 @@ import {
   activityEvents, tasks,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { homedir } from "os";
@@ -22,13 +23,44 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
+/**
+ * Check if the OpenClaw gateway is alive.
+ *
+ * Strategy (in order):
+ *  1. CLI: `openclaw status --json` — fast, no HTTP, works even under load
+ *  2. HTTP: GET /health with 4 s timeout — fallback if CLI fails
+ *  3. HTTP retry once — one transient blip is not enough to declare offline
+ */
 async function pingGateway(): Promise<{ alive: boolean; version?: string }> {
+  // 1. CLI (most reliable — local process, no networking)
   try {
-    const res = await fetch(`${GATEWAY_URL}/health`, { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return { alive: false };
-    const json = await res.json();
-    return { alive: true, version: json.version ?? undefined };
-  } catch { return { alive: false }; }
+    const out = execSync("openclaw status --json", {
+      timeout: 5_000,
+      encoding: "utf-8",
+      env: { ...process.env, HOME: homedir() },
+    });
+    const json = JSON.parse(out);
+    if (json?.runtimeVersion || json?.heartbeat) {
+      return { alive: true, version: json.runtimeVersion ?? undefined };
+    }
+  } catch { /* CLI unavailable or gateway not running — fall through */ }
+
+  // 2. HTTP with generous timeout
+  async function httpPing(): Promise<{ alive: boolean; version?: string }> {
+    try {
+      const res = await fetch(`${GATEWAY_URL}/health`, { signal: AbortSignal.timeout(4_000) });
+      if (!res.ok) return { alive: false };
+      const json = await res.json();
+      return { alive: true, version: json.version ?? undefined };
+    } catch { return { alive: false }; }
+  }
+
+  const first = await httpPing();
+  if (first.alive) return first;
+
+  // 3. One retry — a single blip should not flip the status
+  await new Promise((r) => setTimeout(r, 600));
+  return httpPing();
 }
 
 function readOpenclawConfig() {

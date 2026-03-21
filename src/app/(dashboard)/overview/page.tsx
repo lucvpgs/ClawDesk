@@ -52,11 +52,13 @@ export default function OverviewPage() {
   const qc = useQueryClient();
   const { setActiveRuntime } = useRuntimeStore();
   const [alertDismissed, setAlertDismissed] = useState(false);
+  // Track consecutive gateway failures to avoid flickering on transient blips
+  const [gatewayFailCount, setGatewayFailCount] = useState(0);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<OverviewData>({
     queryKey: ["overview"],
     queryFn: () => fetch("/api/overview").then((r) => r.json()),
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,   // slightly relaxed — CLI check is fast anyway
   });
 
   const { data: cronRuns } = useQuery<{ runs: unknown[]; failedCount: number }>({
@@ -67,8 +69,9 @@ export default function OverviewPage() {
   });
 
   useEffect(() => {
-    if (data?.noRuntime && !data?.gateway?.alive) router.push("/onboarding");
-    if (data?.runtimeSource) {
+    if (!data) return;
+    if (data.noRuntime && !data.gateway?.alive) router.push("/onboarding");
+    if (data.runtimeSource) {
       setActiveRuntime({
         id: data.runtimeSource.id,
         name: data.runtimeSource.name,
@@ -76,6 +79,9 @@ export default function OverviewPage() {
         status: data.runtimeSource.status,
       });
     }
+    // Reset failure counter when gateway is confirmed alive
+    if (data.gateway?.alive) setGatewayFailCount(0);
+    else setGatewayFailCount((n) => n + 1);
   }, [data, router, setActiveRuntime]);
 
   if (isLoading) return (
@@ -104,6 +110,12 @@ export default function OverviewPage() {
   const enabledCrons   = cronJobs.filter((j) => j.enabled);
   const modelShort     = primaryModel ? primaryModel.split("/").pop() ?? primaryModel : null;
   const modelProvider  = primaryModel ? primaryModel.split("/")[0] : null;
+
+  // Only show "Offline" after 2 consecutive failures — avoids flickering on transient blips
+  const gatewayAlive   = gateway.alive || gatewayFailCount < 2;
+  const gatewayLabel   = gateway.alive ? "Live" : gatewayFailCount < 2 ? "Checking…" : "Offline";
+  const gatewayColor   = gateway.alive ? "text-emerald-400" : gatewayFailCount < 2 ? "text-zinc-500" : "text-red-400";
+  const gatewayIcon    = gateway.alive ? "text-emerald-400" : gatewayFailCount < 2 ? "text-zinc-500" : "text-red-400";
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -148,10 +160,10 @@ export default function OverviewPage() {
 
         {/* Gateway */}
         <StatCard
-          icon={<Zap className={cn("w-4 h-4", gateway.alive ? "text-emerald-400" : "text-red-400")} />}
+          icon={<Zap className={cn("w-4 h-4", gatewayIcon)} />}
           label="Gateway"
-          value={gateway.alive ? "Live" : "Offline"}
-          valueClass={gateway.alive ? "text-emerald-400" : "text-red-400"}
+          value={gatewayLabel}
+          valueClass={gatewayColor}
           sub={gateway.version ?? "localhost:18789"}
           href="/system"
         />
