@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { execSync } from "child_process";
-import { homedir } from "os";
+import { cliEnv } from "@/server/cli-env";
 
 export async function GET(
   _req: Request,
@@ -20,7 +20,7 @@ export async function GET(
     const out = execSync(`openclaw cron runs --id ${id} --limit 10`, {
       timeout: 8_000,
       encoding: "utf-8",
-      env: { ...process.env, HOME: homedir() },
+      env: cliEnv(),
     });
 
     const data = JSON.parse(out);

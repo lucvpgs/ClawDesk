@@ -9,6 +9,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use tauri_plugin_single_instance;
 
 const PORT: u16 = 3131;
 
@@ -103,6 +104,31 @@ fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
 
 // ── Server lifecycle ─────────────────────────────────────────────────────────
 
+/// Parse a .env.local file and return key=value pairs.
+/// Skips comments and blank lines; strips surrounding quotes from values.
+fn load_env_file(path: &PathBuf) -> Vec<(String, String)> {
+    let mut vars = Vec::new();
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some(eq) = line.find('=') {
+                let key = line[..eq].trim().to_string();
+                let val = line[eq + 1..].trim();
+                let val = val
+                    .strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+                    .or_else(|| val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+                    .unwrap_or(val)
+                    .to_string();
+                vars.push((key, val));
+            }
+        }
+    }
+    vars
+}
+
 fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<Child> {
     let dir = standalone_dir(app);
     let cwd = server_cwd(app);
@@ -116,15 +142,32 @@ fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<C
 
     std::fs::create_dir_all(data_dir)?;
 
-    Command::new(&node)
-        .arg(&script)
+    // Load .env.local: from project root in dev, from data_dir in production.
+    let env_file = if cfg!(debug_assertions) {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(".env.local")
+    } else {
+        data_dir.join(".env.local")
+    };
+    let extra_env = load_env_file(&env_file);
+    println!("[clawdesk] env    = {} vars from {}", extra_env.len(), env_file.display());
+
+    let mut cmd = Command::new(&node);
+    cmd.arg(&script)
         .current_dir(&cwd)
         .env("PORT", PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
         .env("NODE_ENV", "production")
         .env("CLAWDESK_DATA_DIR", data_dir)
-        .env("TAURI_AUTO_LOGIN", tauri_token()) // consumed by /api/auth/tauri
-        .spawn()
+        .env("TAURI_AUTO_LOGIN", tauri_token());
+
+    for (k, v) in extra_env {
+        cmd.env(k, v);
+    }
+
+    cmd.spawn()
 }
 
 fn wait_for_server() {
@@ -152,9 +195,28 @@ fn stop_server() {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // A second instance was launched — focus the existing window instead
+            show_window(app);
+        }))
         .setup(|app| {
             // ── Data directory ────────────────────────────────────────────
             let data_dir = resolve_data_dir(app.handle());
+
+            // ── Seed .env.local in data_dir if missing (production only) ──
+            #[cfg(not(debug_assertions))]
+            {
+                let env_dest = data_dir.join(".env.local");
+                if !env_dest.exists() {
+                    let default_env = "# ClawDesk configuration\n\
+                        # Change CLAWDESK_PASSWORD before exposing to a network\n\
+                        CLAWDESK_PASSWORD=changeme\n\
+                        CLAWDESK_SECRET=clawdesk-insecure-default\n";
+                    let _ = std::fs::create_dir_all(&data_dir);
+                    let _ = std::fs::write(&env_dest, default_env);
+                    println!("[clawdesk] created default .env.local at {}", env_dest.display());
+                }
+            }
 
             // ── Server start ──────────────────────────────────────────────
             // Skip if port already in use (e.g. `pnpm dev` running alongside).

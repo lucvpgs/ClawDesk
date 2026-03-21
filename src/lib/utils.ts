@@ -11,7 +11,11 @@ export function generateId(): string {
 
 export function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return "never";
-  const date = new Date(dateStr);
+  // SQLite datetime('now') returns UTC without timezone marker (e.g. "2026-03-21 22:21:47").
+  // JS treats such strings as local time → wrong diff for users outside UTC.
+  // Normalize: replace space separator with T and append Z to force UTC parsing.
+  const normalized = /[Z+]/.test(dateStr) ? dateStr : dateStr.replace(" ", "T") + "Z";
+  const date = new Date(normalized);
   const now = new Date();
   const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;

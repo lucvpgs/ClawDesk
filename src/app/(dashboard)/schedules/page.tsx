@@ -909,7 +909,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 // ── DeliverySection — with live channel validation ────────────────────────────
-interface ChannelStatus { channelType: string; running: boolean | null; configured: boolean | null; }
+interface ChannelStatus { channelType: string; running: boolean | null; configured: boolean | null; probe?: { ok?: boolean } | null; }
 
 function DeliverySection({
   outputTarget, deliveryTo, onTargetChange, onDeliveryToChange,
@@ -931,7 +931,8 @@ function DeliverySection({
     if (!type || type === "none") return null;
     const ch = channels.find((c) => c.channelType.toLowerCase() === type.toLowerCase());
     if (!ch) return "missing";
-    if (ch.running) return "running";
+    // probe.ok = true means the bot is reachable and credentials work — treat as running
+    if (ch.running || ch.probe?.ok) return "running";
     if (ch.configured) return "configured";
     return "missing";
   }

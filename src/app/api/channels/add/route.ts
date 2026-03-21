@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { execSync } from "child_process";
-import { homedir } from "os";
+import { cliEnv } from "@/server/cli-env";
 
 const SUPPORTED = ["discord", "telegram", "slack", "googlechat"] as const;
 type SupportedChannel = (typeof SUPPORTED)[number];
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const out = execSync(args.join(" "), {
       timeout: 15_000,
       encoding: "utf-8",
-      env: { ...process.env, HOME: homedir() },
+      env: cliEnv(),
     });
     return NextResponse.json({ ok: true, output: out.trim() });
   } catch (e: unknown) {

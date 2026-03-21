@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { generateId } from "@/lib/utils";
 import { normalizeCronJob } from "@/lib/cron-utils";
 import { execSync } from "child_process";
+import { cliEnv } from "@/server/cli-env";
 
 const CRON_FILE = path.join(homedir(), ".openclaw", "cron", "jobs.json");
 
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
     const out = execSync(`openclaw cron run ${jobId}`, {
       timeout: 10_000,
       encoding: "utf-8",
-      env: { ...process.env, HOME: process.env.HOME ?? "/tmp" },
+      env: cliEnv(),
     });
     const result = JSON.parse(out);
 

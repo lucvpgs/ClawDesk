@@ -12,7 +12,9 @@
     "db:studio": "drizzle-kit studio",
     "tauri:dev": "pnpm tauri dev",
     "tauri:build": "pnpm tauri build",
-    "build:desktop": "next build && node scripts/copy-standalone-assets.mjs"
+    "build:desktop": "next build && node scripts/copy-standalone-assets.mjs",
+    "smoke-test": "node scripts/smoke-test-bundle.mjs",
+    "build:release": "pnpm build:desktop && pnpm smoke-test"
   },
   "keywords": [],
   "author": "",

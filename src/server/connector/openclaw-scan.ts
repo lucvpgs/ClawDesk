@@ -21,7 +21,13 @@ export function findOpenClawBinary(): string | null {
     if (fs.existsSync(p)) return p;
   }
   try {
-    const found = execSync("which openclaw", { encoding: "utf-8", timeout: 2000 }).trim();
+    const extraPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+    const PATH = process.env.PATH ? `${process.env.PATH}:${extraPaths}` : extraPaths;
+    const found = execSync("which openclaw", {
+      encoding: "utf-8",
+      timeout: 2000,
+      env: { ...process.env, PATH },
+    }).trim();
     if (found) return found;
   } catch { /* not found in PATH */ }
   return null;

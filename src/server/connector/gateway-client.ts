@@ -32,13 +32,29 @@ export class GatewayClient {
 
   // ── CLI helper ───────────────────────────────────────────────────────────
 
+  /** Builds an env suitable for execSync: inherits process.env and augments
+   *  PATH with common binary directories so that node-based CLIs (openclaw,
+   *  which is a .mjs shim) can locate the node executable even when the
+   *  parent process was started with a minimal environment (e.g. Tauri). */
+  private cliEnv(): NodeJS.ProcessEnv {
+    const extraPaths = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+    ].join(":");
+    const currentPath = process.env.PATH ?? "";
+    const merged = currentPath ? `${currentPath}:${extraPaths}` : extraPaths;
+    return { ...process.env, PATH: merged, HOME: process.env.HOME ?? "/tmp" };
+  }
+
   private cliCall<T = unknown>(method: string, extraArgs: string[] = []): T | null {
     try {
       const args = ["gateway", "call", method, "--json", ...extraArgs].join(" ");
       const out = execSync(`${this.bin} ${args}`, {
         timeout: 10_000,
         encoding: "utf-8",
-        env: { ...process.env, HOME: process.env.HOME ?? "/tmp" },
+        env: this.cliEnv(),
       });
       return JSON.parse(out) as T;
     } catch {
@@ -51,7 +67,7 @@ export class GatewayClient {
       const out = execSync(`${this.bin} ${subcommand} --json`, {
         timeout: 10_000,
         encoding: "utf-8",
-        env: { ...process.env, HOME: process.env.HOME ?? "/tmp" },
+        env: this.cliEnv(),
       });
       return JSON.parse(out) as T;
     } catch {

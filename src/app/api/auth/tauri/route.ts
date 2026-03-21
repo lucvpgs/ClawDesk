@@ -21,7 +21,18 @@ export async function GET(req: NextRequest) {
 
   const secret = process.env.CLAWDESK_SECRET ?? "clawdesk-insecure-default";
 
-  const res = NextResponse.redirect(new URL("/", req.url));
+  // Use an HTML page with JS redirect instead of a server-side 3xx redirect.
+  // WKWebView (macOS) can silently drop Set-Cookie headers on redirect responses,
+  // so we serve the cookie on a real HTML response and let JS navigate to "/".
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<script>window.location.replace("/");</script>
+</head><body>Logging in…</body></html>`;
+
+  const res = new NextResponse(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
   res.cookies.set("clawdesk-auth", secret, {
     httpOnly: true,
     sameSite: "lax",

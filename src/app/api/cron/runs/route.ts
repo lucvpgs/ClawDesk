@@ -7,6 +7,7 @@ import { execSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { homedir } from "os";
 import path from "path";
+import { cliEnv } from "@/server/cli-env";
 
 const JOBS_FILE = path.join(homedir(), ".openclaw", "cron", "jobs.json");
 
@@ -29,7 +30,7 @@ export async function GET() {
       const out = execSync(`openclaw cron runs --id ${id}`, {
         timeout: 5_000,
         encoding: "utf-8",
-        env: { ...process.env, HOME: homedir() },
+        env: cliEnv(),
       });
       const data = JSON.parse(out);
       if (Array.isArray(data?.entries)) {

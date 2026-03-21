@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { cn, timeAgo, statusDot } from "@/lib/utils";
 import { useRuntimeStore } from "@/lib/store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -54,6 +54,7 @@ export default function OverviewPage() {
   const [alertDismissed, setAlertDismissed] = useState(false);
   // Track consecutive gateway failures to avoid flickering on transient blips
   const [gatewayFailCount, setGatewayFailCount] = useState(0);
+  const didStartupSync = useRef(false);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<OverviewData>({
     queryKey: ["overview"],
@@ -70,7 +71,25 @@ export default function OverviewPage() {
 
   useEffect(() => {
     if (!data) return;
-    if (data.noRuntime && !data.gateway?.alive) router.push("/onboarding");
+
+    if (data.noRuntime) {
+      // Try to auto-connect before falling back to onboarding
+      fetch("/api/runtime-sources/auto-setup")
+        .then((r) => r.json())
+        .then((res) => {
+          if (res.provisioned) {
+            // Newly connected — refresh overview data
+            qc.invalidateQueries({ queryKey: ["overview"] });
+          } else if (res.reason !== "already_configured" && !data.gateway?.alive) {
+            // Not connected and gateway unreachable — send to onboarding
+            router.push("/onboarding");
+          }
+        })
+        .catch(() => {
+          if (!data.gateway?.alive) router.push("/onboarding");
+        });
+    }
+
     if (data.runtimeSource) {
       setActiveRuntime({
         id: data.runtimeSource.id,
@@ -78,6 +97,13 @@ export default function OverviewPage() {
         gatewayUrl: "",
         status: data.runtimeSource.status,
       });
+      // Auto-sync once per session so agents/channels are always fresh
+      if (!didStartupSync.current) {
+        didStartupSync.current = true;
+        fetch("/api/runtime-sources/sync", { method: "POST" })
+          .then(() => qc.invalidateQueries({ queryKey: ["overview"] }))
+          .catch(() => {/* non-fatal */});
+      }
     }
     // Reset failure counter when gateway is confirmed alive
     if (data.gateway?.alive) setGatewayFailCount(0);

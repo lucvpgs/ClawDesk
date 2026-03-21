@@ -7,6 +7,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { execSync } from "child_process";
+import { cliEnv } from "@/server/cli-env";
 import fs from "fs";
 import path from "path";
 import { homedir } from "os";
@@ -37,7 +38,7 @@ async function pingGateway(): Promise<{ alive: boolean; version?: string }> {
     const out = execSync("openclaw status --json", {
       timeout: 5_000,
       encoding: "utf-8",
-      env: { ...process.env, HOME: homedir() },
+      env: cliEnv(),
     });
     const json = JSON.parse(out);
     if (json?.runtimeVersion || json?.heartbeat) {

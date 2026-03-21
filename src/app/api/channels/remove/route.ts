@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { execSync } from "child_process";
-import { homedir } from "os";
+import { cliEnv } from "@/server/cli-env";
 
 export async function DELETE(req: Request) {
   const body = await req.json() as { channel: string };
@@ -18,7 +18,7 @@ export async function DELETE(req: Request) {
     const out = execSync(`openclaw channels remove --channel ${channel} --delete`, {
       timeout: 10_000,
       encoding: "utf-8",
-      env: { ...process.env, HOME: homedir() },
+      env: cliEnv(),
     });
     return NextResponse.json({ ok: true, output: out.trim() });
   } catch (e: unknown) {
