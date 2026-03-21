@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%"   stop-color="#1A0533"/>
+      <stop offset="100%" stop-color="#3B0D6B"/>
+    </linearGradient>
+    <linearGradient id="claw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#EDE9FE" stop-opacity="1"/>
+      <stop offset="55%"  stop-color="#A78BFA" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#6D28D9" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="glow_l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#C4B5FD" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="blur_claw">
+      <feGaussianBlur stdDeviation="12" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="url(#bg)"/>
+
+  <!-- Subtle inner border -->
+  <rect x="28" y="28" width="968" height="968" rx="204" ry="204"
+        fill="none" stroke="#7C3AED" stroke-width="1.5" opacity="0.18"/>
+
+  <!-- Glow halo behind claws -->
+  <ellipse cx="512" cy="480" rx="280" ry="340"
+           fill="#7C3AED" opacity="0.12"/>
+
+  <!-- ── CLAW MARKS ── -->
+  <!-- Three tapered claw marks fanning from base (y≈720) upward -->
+  <!-- Each: wide at base, sharp pointed tip, slight outward curve  -->
+
+  <!-- LEFT CLAW — tip (288, 188), base (374,700)→(418,700) -->
+  <path d="
+    M 374 700
+    C 358 580, 248 360, 268 188
+    L 312 188
+    C 300 360, 434 580, 418 700
+    Z"
+    fill="url(#claw)" filter="url(#blur_claw)" opacity="0.93"/>
+
+  <!-- CENTER CLAW — tip (508, 152), base (474,720)→(550,720) -->
+  <path d="
+    M 474 720
+    C 464 590, 474 370, 494 152
+    L 530 152
+    C 552 370, 562 590, 550 720
+    Z"
+    fill="url(#claw)" filter="url(#blur_claw)" opacity="0.98"/>
+
+  <!-- RIGHT CLAW — tip (736, 188), base (606,700)→(650,700) -->
+  <path d="
+    M 606 700
+    C 590 580, 724 360, 712 188
+    L 756 188
+    C 776 360, 666 580, 650 700
+    Z"
+    fill="url(#claw)" filter="url(#blur_claw)" opacity="0.93"/>
+
+  <!-- Desk surface — thin horizontal line below claws -->
+  <rect x="172" y="742" width="680" height="5" rx="2.5"
+        fill="#A78BFA" opacity="0.4"/>
+  <!-- Reflection below line -->
+  <rect x="260" y="752" width="504" height="2" rx="1"
+        fill="#C4B5FD" opacity="0.14"/>
+
+</svg>
