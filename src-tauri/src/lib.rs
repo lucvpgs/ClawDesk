@@ -1,7 +1,8 @@
+use std::io::Read;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -12,39 +13,63 @@ use tauri::{
 const PORT: u16 = 3131;
 
 /// Global handle to the spawned Next.js process.
-/// Kept alive until the app exits, then killed in RunEvent::Exit.
 static SERVER: Mutex<Option<Child>> = Mutex::new(None);
+
+/// One-time auto-login token, generated fresh on every app start.
+/// Passed to the server as TAURI_AUTO_LOGIN and used in the initial window URL.
+static TAURI_TOKEN: OnceLock<String> = OnceLock::new();
+
+// ── Token generation ─────────────────────────────────────────────────────────
+
+/// Generate a 48-char hex token from /dev/urandom (macOS / Linux).
+fn generate_token() -> String {
+    let mut bytes = [0u8; 24];
+    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+        let _ = f.read_exact(&mut bytes);
+    }
+    // Fallback: mix time + pid (weak but prevents an empty token)
+    if bytes.iter().all(|&b| b == 0) {
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos();
+        let pid = std::process::id();
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = ((t >> (i % 32)) ^ (pid >> (i % 32))) as u8;
+        }
+    }
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn tauri_token() -> &'static str {
+    TAURI_TOKEN.get_or_init(generate_token).as_str()
+}
 
 // ── Node.js discovery ────────────────────────────────────────────────────────
 
-/// Find the `node` binary.  On macOS, Homebrew installs to `/opt/homebrew`
-/// (Apple Silicon) or `/usr/local` (Intel); nvm uses `~/.nvm`.
 fn find_node() -> String {
     let candidates = [
-        "/opt/homebrew/bin/node",   // Apple Silicon Homebrew
-        "/usr/local/bin/node",      // Intel Homebrew / nvm default
-        "/usr/bin/node",            // system Node
+        "/opt/homebrew/bin/node", // Apple Silicon Homebrew
+        "/usr/local/bin/node",    // Intel Homebrew / nvm default
+        "/usr/bin/node",          // system Node
     ];
     for path in candidates {
         if std::path::Path::new(path).exists() {
             return path.to_string();
         }
     }
-    "node".to_string() // last resort: rely on PATH
+    "node".to_string()
 }
 
 // ── Path helpers ─────────────────────────────────────────────────────────────
 
-/// Directory that contains `server.js`.
 fn standalone_dir(app: &tauri::AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
-        // dev mode: project root is the parent of src-tauri/
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join(".next/standalone")
     } else {
-        // release: server is bundled in app resources (configured in Stage 7)
         app.path()
             .resource_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
@@ -52,9 +77,6 @@ fn standalone_dir(app: &tauri::AppHandle) -> PathBuf {
     }
 }
 
-/// Working directory for the node process.
-/// Dev: project root — so `process.cwd()/data/` resolves the same DB as `pnpm dev`.
-/// Release: standalone dir — CLAWDESK_DATA_DIR takes over DB placement.
 fn server_cwd(app: &tauri::AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -66,9 +88,6 @@ fn server_cwd(app: &tauri::AppHandle) -> PathBuf {
     }
 }
 
-/// Resolve the data directory:
-/// - dev  → project root / data/   (same as `pnpm dev`, preserves existing DB)
-/// - prod → ~/Library/Application Support/com.vpgs.clawdesk/
 fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -95,7 +114,6 @@ fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<C
     println!("[clawdesk] cwd    = {}", cwd.display());
     println!("[clawdesk] data   = {}", data_dir.display());
 
-    // Ensure data directory exists before the server tries to open the DB
     std::fs::create_dir_all(data_dir)?;
 
     Command::new(&node)
@@ -105,14 +123,13 @@ fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<C
         .env("HOSTNAME", "127.0.0.1")
         .env("NODE_ENV", "production")
         .env("CLAWDESK_DATA_DIR", data_dir)
+        .env("TAURI_AUTO_LOGIN", tauri_token()) // consumed by /api/auth/tauri
         .spawn()
 }
 
-/// Poll until `127.0.0.1:PORT` accepts TCP connections (max ~10 s).
 fn wait_for_server() {
     for _ in 0..40 {
         if TcpStream::connect(format!("127.0.0.1:{PORT}")).is_ok() {
-            // Brief pause so the HTTP layer is fully up after TCP bind
             std::thread::sleep(Duration::from_millis(200));
             println!("[clawdesk] server ready on :{PORT}");
             return;
@@ -122,7 +139,6 @@ fn wait_for_server() {
     println!("[clawdesk] warning: server did not respond within 10 s");
 }
 
-/// Kill the server process on app exit.
 fn stop_server() {
     if let Ok(mut guard) = SERVER.lock() {
         if let Some(mut child) = guard.take() {
@@ -140,9 +156,8 @@ pub fn run() {
             // ── Data directory ────────────────────────────────────────────
             let data_dir = resolve_data_dir(app.handle());
 
-            // ── Server start (skip if port already in use) ────────────────
-            // This allows `pnpm tauri:dev` to co-exist with `pnpm dev`:
-            // if port 3131 is already bound, Tauri attaches to that server.
+            // ── Server start ──────────────────────────────────────────────
+            // Skip if port already in use (e.g. `pnpm dev` running alongside).
             let port_free = TcpStream::connect(format!("127.0.0.1:{PORT}")).is_err();
 
             if port_free {
@@ -158,12 +173,18 @@ pub fn run() {
             }
 
             // ── Main window ───────────────────────────────────────────────
+            // Load /api/auth/tauri?token=<TAURI_TOKEN> first.
+            // That endpoint sets the auth cookie and redirects to "/" —
+            // so the login screen never appears in the Tauri window.
+            let auto_login_url = format!(
+                "http://127.0.0.1:{PORT}/api/auth/tauri?token={}",
+                tauri_token()
+            );
+
             let window = WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External(
-                    format!("http://127.0.0.1:{PORT}").parse().unwrap(),
-                ),
+                WebviewUrl::External(auto_login_url.parse().unwrap()),
             )
             .title("ClawDesk")
             .inner_size(1400.0, 900.0)
@@ -216,7 +237,6 @@ pub fn run() {
             let _ = window;
             Ok(())
         })
-        // ── Hide on close instead of quitting ─────────────────────────────
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 window.hide().unwrap();
@@ -226,14 +246,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error building tauri application")
         .run(|_app, event| {
-            // Kill server when the app fully exits
             if let tauri::RunEvent::Exit = event {
                 stop_server();
             }
         });
 }
 
-/// Bring the main window to the foreground.
 fn show_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
