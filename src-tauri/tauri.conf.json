@@ -7,7 +7,7 @@
     "frontendDist": "../public",
     "devUrl": "http://localhost:3131",
     "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "pnpm build:desktop"
   },
   "app": {
     "withGlobalTauri": false,
@@ -24,6 +24,28 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../.next/standalone-bundle": "server"
+    },
+    "copyright": "© 2026 lucvpgs",
+    "category": "DeveloperTool",
+    "shortDescription": "Mission Control for OpenClaw agents",
+    "longDescription": "ClawDesk is a desktop dashboard for managing OpenClaw agents, tasks, schedules, channels, models, and integrations.",
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "entitlements": null,
+      "exceptionDomain": null,
+      "signingIdentity": null,
+      "providerShortName": null
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    }
   }
 }
