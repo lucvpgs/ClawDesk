@@ -1,0 +1,9 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema/acl/schemas/capability.schema.json",
+  "identifier": "default",
+  "description": "Default capability for ClawDesk",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

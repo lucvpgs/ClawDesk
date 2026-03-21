@@ -9,7 +9,9 @@
     "start": "next start --port 3131 --hostname 0.0.0.0",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node src/db/migrate.mjs",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "tauri:dev": "pnpm tauri dev",
+    "tauri:build": "pnpm tauri build"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +32,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",

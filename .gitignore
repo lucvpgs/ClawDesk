@@ -29,3 +29,7 @@ npm-debug.log*
 
 # Claude Code
 .claude/
+
+# Tauri
+src-tauri/target/
+src-tauri/app-icon-source.png
