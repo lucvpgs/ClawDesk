@@ -4,6 +4,12 @@
  * Fallback: hash-based color for unknown agent IDs.
  */
 
+/** Minimal shape returned by /api/agents — subset used for dropdowns. */
+export interface RuntimeAgent {
+  agentId: string;
+  name: string | null;
+}
+
 export interface AgentAccent {
   dot:    string;   // bg-* class for the status dot
   badge:  string;   // bg+text+border classes for the chip/badge

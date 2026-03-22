@@ -9,7 +9,7 @@ import {
   History,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
-import { agentAccent, agentDisplayName, agentInitial, KNOWN_AGENTS } from "@/lib/agent-colors";
+import { agentAccent, agentDisplayName, agentInitial, KNOWN_AGENTS, RuntimeAgent } from "@/lib/agent-colors";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CronJob {
@@ -110,6 +110,15 @@ export default function SchedulesPage() {
     queryFn:  () => fetch("/api/schedules").then((r) => r.json()),
     refetchInterval: 15_000,
   });
+
+  const { data: agentsData } = useQuery<{ agents: RuntimeAgent[] }>({
+    queryKey: ["agents"],
+    queryFn: () => fetch("/api/agents").then((r) => r.json()),
+    refetchInterval: 30_000,
+  });
+  const agentList: RuntimeAgent[] = agentsData?.agents?.length
+    ? agentsData.agents
+    : KNOWN_AGENTS.map((a) => ({ agentId: a.id, name: a.name }));
 
   const runMutation = useMutation({
     mutationFn: (jobId: string) =>
@@ -215,6 +224,7 @@ export default function SchedulesPage() {
       {selectedJob && (
         <JobDetailPanel
           job={selectedJob}
+          agents={agentList}
           onClose={() => setSelectedId(null)}
           onSaved={() => { setSelectedId(null); qc.invalidateQueries({ queryKey: ["schedules"] }); }}
           onRun={() => runMutation.mutate(selectedJob.jobId)}
@@ -225,6 +235,7 @@ export default function SchedulesPage() {
       {/* Create modal */}
       {showCreate && (
         <CreateScheduleModal
+          agents={agentList}
           onClose={() => setShowCreate(false)}
           onCreated={() => { setShowCreate(false); qc.invalidateQueries({ queryKey: ["schedules"] }); }}
         />
@@ -496,9 +507,10 @@ function CalendarView({
 
 // ── Job Detail Panel ───────────────────────────────────────────────────────────
 function JobDetailPanel({
-  job, onClose, onSaved, onRun, running,
+  job, agents, onClose, onSaved, onRun, running,
 }: {
   job: CronJob;
+  agents: RuntimeAgent[];
   onClose: () => void;
   onSaved: () => void;
   onRun: () => void;
@@ -507,7 +519,7 @@ function JobDetailPanel({
   const accent = agentAccent(job.agentId);
 
   const [name,         setName]         = useState(job.name ?? "");
-  const [agentId,      setAgentId]      = useState(job.agentId ?? "main");
+  const [agentId,      setAgentId]      = useState(job.agentId ?? agents[0]?.agentId ?? "");
   const [schedule,     setSchedule]     = useState(job.schedule ?? "");
   const [customSched,  setCustomSched]  = useState("");
   const [preset,       setPreset]       = useState<string>(
@@ -645,8 +657,8 @@ function JobDetailPanel({
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
             >
-              {KNOWN_AGENTS.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+              {agents.map((a) => (
+                <option key={a.agentId} value={a.agentId}>{(a.name ?? a.agentId)} ({a.agentId})</option>
               ))}
             </select>
           </div>
@@ -741,13 +753,14 @@ function JobDetailPanel({
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 function CreateScheduleModal({
-  onClose, onCreated,
+  agents, onClose, onCreated,
 }: {
+  agents: RuntimeAgent[];
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [name,         setName]         = useState("");
-  const [agentId,      setAgentId]      = useState("main");
+  const [agentId,      setAgentId]      = useState(agents[0]?.agentId ?? "");
   const [preset,       setPreset]       = useState("0 9 * * *");
   const [customSched,  setCustomSched]  = useState("");
   const [prompt,       setPrompt]       = useState("");
@@ -831,8 +844,8 @@ function CreateScheduleModal({
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
             >
-              {KNOWN_AGENTS.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+              {agents.map((a) => (
+                <option key={a.agentId} value={a.agentId}>{(a.name ?? a.agentId)} ({a.agentId})</option>
               ))}
             </select>
           </div>

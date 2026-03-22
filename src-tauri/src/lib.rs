@@ -141,6 +141,15 @@ fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<C
     println!("[clawdesk] cwd    = {}", cwd.display());
     println!("[clawdesk] data   = {}", data_dir.display());
 
+    // Fail fast with a clear message if the bundled server.js is missing.
+    if !script.exists() {
+        eprintln!("[clawdesk] ERROR: server.js not found at {}", script.display());
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("server.js not found at {}", script.display()),
+        ));
+    }
+
     std::fs::create_dir_all(data_dir)?;
 
     // Load .env.local: from project root in dev, from data_dir in production.
@@ -262,6 +271,7 @@ pub fn run() {
             // Skip if port already in use (e.g. `pnpm dev` running alongside).
             let port_free = TcpStream::connect(format!("127.0.0.1:{PORT}")).is_err();
 
+            let server_ready: bool;
             if port_free {
                 match start_server(app.handle(), &data_dir) {
                     Ok(child) => {
@@ -270,23 +280,38 @@ pub fn run() {
                     }
                     Err(e) => eprintln!("[clawdesk] failed to start server: {e}"),
                 }
+                // Verify the server is actually accepting connections.
+                server_ready = TcpStream::connect(format!("127.0.0.1:{PORT}")).is_ok();
+                if !server_ready {
+                    eprintln!("[clawdesk] server did not become ready — loading error page");
+                }
             } else {
                 println!("[clawdesk] port {PORT} in use — attaching to existing server");
+                server_ready = true;
             }
 
             // ── Main window ───────────────────────────────────────────────
-            // Load /api/auth/tauri?token=<TAURI_TOKEN> first.
-            // That endpoint sets the auth cookie and redirects to "/" —
-            // so the login screen never appears in the Tauri window.
-            let auto_login_url = format!(
-                "http://127.0.0.1:{PORT}/api/auth/tauri?token={}",
-                tauri_token()
-            );
+            // On success: load /api/auth/tauri?token=<TAURI_TOKEN> which sets
+            // the auth cookie and redirects to "/" (no login screen needed).
+            // On failure: load the bundled startup-error.html from public/
+            // so the user sees an actionable message instead of a white screen.
+            let initial_url = if server_ready {
+                WebviewUrl::External(
+                    format!(
+                        "http://127.0.0.1:{PORT}/api/auth/tauri?token={}",
+                        tauri_token()
+                    )
+                    .parse()
+                    .unwrap(),
+                )
+            } else {
+                WebviewUrl::App(std::path::PathBuf::from("startup-error.html"))
+            };
 
             let window = WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External(auto_login_url.parse().unwrap()),
+                initial_url,
             )
             .title("ClawDesk")
             .inner_size(1400.0, 900.0)

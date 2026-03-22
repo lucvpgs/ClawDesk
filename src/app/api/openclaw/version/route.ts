@@ -5,6 +5,23 @@ import path from "path";
 const OPENCLAW_JSON = path.join(process.env.HOME!, ".openclaw", "openclaw.json");
 const UPDATE_CHECK  = path.join(process.env.HOME!, ".openclaw", "update-check.json");
 
+/** Try to fetch the live running version from the gateway HTTP endpoint. */
+async function liveGatewayVersion(gatewayUrl: string): Promise<string | null> {
+  try {
+    // /health returns { version, ... }
+    const res = await fetch(`${gatewayUrl}/health`, {
+      signal: AbortSignal.timeout(2_500),
+    });
+    if (!res.ok) return null;
+    const json = await res.json() as Record<string, unknown>;
+    // Gateway returns version as `version` or `runtimeVersion`
+    const v = (json.version ?? json.runtimeVersion) as string | undefined;
+    return v ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   try {
     const cfg         = JSON.parse(fs.readFileSync(OPENCLAW_JSON, "utf8"));
@@ -12,9 +29,19 @@ export async function GET() {
       ? JSON.parse(fs.readFileSync(UPDATE_CHECK, "utf8"))
       : {};
 
-    const openclawVersion: string  = cfg?.meta?.lastTouchedVersion ?? "unknown";
-    const lastCheckedAt:   string  = updateCheck?.lastCheckedAt     ?? null;
-    const latestAvailable: string  = updateCheck?.latestVersion     ?? null;
+    // Config-file version (set when openclaw last started and wrote its config)
+    const configVersion: string = cfg?.meta?.lastTouchedVersion ?? "unknown";
+
+    // Live version from the running gateway (more accurate — reflects restarts & updates)
+    const port       = cfg?.gateway?.port ?? 18789;
+    const gatewayUrl = `http://localhost:${port}`;
+    const live       = await liveGatewayVersion(gatewayUrl);
+
+    // Prefer live version; fall back to config version
+    const openclawVersion = live ?? configVersion;
+
+    const lastCheckedAt:   string  = updateCheck?.lastCheckedAt ?? null;
+    const latestAvailable: string  = updateCheck?.latestVersion  ?? null;
     const updateAvailable: boolean = !!latestAvailable && latestAvailable !== openclawVersion;
 
     return NextResponse.json({

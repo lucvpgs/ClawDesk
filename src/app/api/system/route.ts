@@ -20,12 +20,13 @@ export async function GET() {
     token: sources[0].authToken ?? "",
   });
 
-  const [status, health] = await Promise.all([
+  // Run all three in parallel — getStatus/getHealth now use async exec (non-blocking),
+  // and scanLocalOpenClaw reads local files so it completes quickly.
+  const [status, health, scan] = await Promise.all([
     client.getStatus() as Promise<Record<string, unknown> | null>,
     client.getHealth() as Promise<Record<string, unknown> | null>,
+    Promise.resolve().then(() => scanLocalOpenClaw()),
   ]);
-
-  const scan = await scanLocalOpenClaw();
 
   const sessionDefaults = (status?.sessions as Record<string, unknown> | undefined)?.defaults as Record<string, unknown> | undefined;
   const healthChannels = (health as Record<string, unknown> | null)?.channels as Record<string, unknown> | undefined;

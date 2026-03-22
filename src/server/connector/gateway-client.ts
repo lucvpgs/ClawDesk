@@ -10,8 +10,11 @@
  * and works perfectly for local-first use without any pairing ceremony.
  */
 
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
+import { promisify } from "util";
 import { findOpenClawBinary } from "./openclaw-scan";
+
+const execAsync = promisify(exec);
 
 export interface GatewayClientOptions {
   baseUrl: string;
@@ -48,11 +51,12 @@ export class GatewayClient {
     return { ...process.env, PATH: merged, HOME: process.env.HOME ?? "/tmp" };
   }
 
+  /** Synchronous CLI call — blocks the event loop; use only where async isn't needed. */
   private cliCall<T = unknown>(method: string, extraArgs: string[] = []): T | null {
     try {
       const args = ["gateway", "call", method, "--json", ...extraArgs].join(" ");
       const out = execSync(`${this.bin} ${args}`, {
-        timeout: 10_000,
+        timeout: 5_000,
         encoding: "utf-8",
         env: this.cliEnv(),
       });
@@ -62,14 +66,49 @@ export class GatewayClient {
     }
   }
 
+  /** Asynchronous CLI call — does NOT block the event loop. Use for high-level getters. */
+  private async cliCallAsync<T = unknown>(method: string, extraArgs: string[] = []): Promise<T | null> {
+    try {
+      const authArgs: string[] = [];
+      if (this.token) authArgs.push("--token", this.token);
+      if (this.baseUrl) authArgs.push("--url", this.baseUrl.replace(/^http/, "ws"));
+      const args = ["gateway", "call", method, "--json", ...authArgs, ...extraArgs].join(" ");
+      const { stdout } = await execAsync(`${this.bin} ${args}`, {
+        timeout: 5_000,
+        encoding: "utf-8",
+        env: this.cliEnv(),
+      });
+      return JSON.parse(stdout) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Synchronous variant of cliRun — blocks the event loop. */
   private cliRun<T = unknown>(subcommand: string): T | null {
     try {
       const out = execSync(`${this.bin} ${subcommand} --json`, {
-        timeout: 10_000,
+        timeout: 5_000,
         encoding: "utf-8",
         env: this.cliEnv(),
       });
       return JSON.parse(out) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Asynchronous variant of cliRun — does NOT block the event loop. */
+  private async cliRunAsync<T = unknown>(subcommand: string): Promise<T | null> {
+    try {
+      // Append --token / --url when the subcommand supports them (cron list, cron run, etc.)
+      const authSuffix = this.token ? ` --token ${this.token}` : "";
+      const { stdout } = await execAsync(`${this.bin} ${subcommand} --json${authSuffix}`, {
+        timeout: 5_000,
+        encoding: "utf-8",
+        env: this.cliEnv(),
+      });
+      return JSON.parse(stdout) as T;
     } catch {
       return null;
     }
@@ -93,18 +132,20 @@ export class GatewayClient {
 
   // ── Status / Health ───────────────────────────────────────────────────────
 
-  async getStatus() {
-    return this.cliCall<Record<string, unknown>>("status");
+  /** Returns the gateway status. Uses async exec — does NOT block the event loop. */
+  async getStatus(): Promise<Record<string, unknown> | null> {
+    return this.cliCallAsync<Record<string, unknown>>("status");
   }
 
-  async getHealth() {
-    return this.cliCall<Record<string, unknown>>("health");
+  /** Returns the gateway health (channels, etc.). Uses async exec — does NOT block the event loop. */
+  async getHealth(): Promise<Record<string, unknown> | null> {
+    return this.cliCallAsync<Record<string, unknown>>("health");
   }
 
   // ── Agents ───────────────────────────────────────────────────────────────
 
   async getAgents(): Promise<unknown[]> {
-    const data = this.cliRun<unknown[]>("agents list");
+    const data = await this.cliRunAsync<unknown[]>("agents list");
     if (Array.isArray(data)) return data;
     return [];
   }
@@ -112,7 +153,7 @@ export class GatewayClient {
   // ── Sessions ─────────────────────────────────────────────────────────────
 
   async getSessions(): Promise<unknown[]> {
-    const status = this.cliCall<{
+    const status = await this.cliCallAsync<{
       sessions?: { recent?: unknown[] };
     }>("status");
     return status?.sessions?.recent ?? [];
@@ -121,14 +162,14 @@ export class GatewayClient {
   // ── Cron ─────────────────────────────────────────────────────────────────
 
   async getCronJobs(): Promise<unknown[]> {
-    const data = this.cliRun<{ jobs?: unknown[] }>("cron list");
+    const data = await this.cliRunAsync<{ jobs?: unknown[] }>("cron list");
     return data?.jobs ?? [];
   }
 
   // ── Channels ─────────────────────────────────────────────────────────────
 
   async getChannels(): Promise<{ type: string; status: string; raw: unknown }[]> {
-    const health = this.cliCall<{ channels?: Record<string, unknown> }>("health");
+    const health = await this.cliCallAsync<{ channels?: Record<string, unknown> }>("health");
     if (!health?.channels) return [];
     return Object.entries(health.channels).map(([type, raw]) => {
       const ch = raw as Record<string, unknown>;
@@ -145,6 +186,6 @@ export class GatewayClient {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async runCronNow(jobId: string): Promise<unknown> {
-    return this.cliRun(`cron run ${jobId}`);
+    return this.cliRunAsync(`cron run ${jobId}`);
   }
 }

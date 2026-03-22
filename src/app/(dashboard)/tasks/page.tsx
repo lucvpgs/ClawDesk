@@ -7,7 +7,7 @@ import {
   ChevronDown, Save, CalendarClock, ExternalLink, Clock,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
-import { agentAccent, agentInitial, agentDisplayName, KNOWN_AGENTS } from "@/lib/agent-colors";
+import { agentAccent, agentInitial, agentDisplayName, KNOWN_AGENTS, RuntimeAgent } from "@/lib/agent-colors";
 import { projectAccent } from "@/lib/project-colors";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -100,6 +100,16 @@ export default function TasksPage() {
     queryKey: ["projects"],
     queryFn: () => fetch("/api/projects").then((r) => r.json()),
   });
+
+  // Fetch live agents from runtime; fall back to hardcoded list when gateway is offline.
+  const { data: agentsData } = useQuery<{ agents: RuntimeAgent[] }>({
+    queryKey: ["agents"],
+    queryFn: () => fetch("/api/agents").then((r) => r.json()),
+    refetchInterval: 30_000,
+  });
+  const agentList: RuntimeAgent[] = agentsData?.agents?.length
+    ? agentsData.agents
+    : KNOWN_AGENTS.map((a) => ({ agentId: a.id, name: a.name }));
 
   const createMutation = useMutation({
     mutationFn: (p: { title: string; priority: string; projectId?: string; status?: string }) =>
@@ -304,6 +314,7 @@ export default function TasksPage() {
         <TaskDetailPanel
           task={detailTask}
           projects={projects}
+          agents={agentList}
           onClose={() => setDetailTaskId(null)}
           onUpdate={(u) => updateMutation.mutate({ id: detailTask.id, ...u })}
           onDelete={() => deleteMutation.mutate(detailTask.id)}
@@ -315,6 +326,7 @@ export default function TasksPage() {
       {cronTask && (
         <PromoteToCronModal
           task={cronTask}
+          agents={agentList}
           onClose={() => setCronTaskId(null)}
           onSuccess={() => {
             setCronTaskId(null);
@@ -430,10 +442,11 @@ function TaskCard({
 
 // ── Task Detail Panel ─────────────────────────────────────────────────────────
 function TaskDetailPanel({
-  task, projects, onClose, onUpdate, onDelete, onPromoteToCron,
+  task, projects, agents, onClose, onUpdate, onDelete, onPromoteToCron,
 }: {
   task: Task;
   projects: Project[];
+  agents: RuntimeAgent[];
   onClose: () => void;
   onUpdate: (u: Record<string, unknown>) => void;
   onDelete: () => void;
@@ -538,7 +551,7 @@ function TaskDetailPanel({
               onChange={(e) => setAgentId(e.target.value)}
             >
               <option value="">Unassigned</option>
-              {KNOWN_AGENTS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {agents.map((a) => <option key={a.agentId} value={a.agentId}>{a.name ?? a.agentId}</option>)}
             </select>
             {agentId && (
               <div className="mt-1.5 flex items-center gap-2">
@@ -656,14 +669,15 @@ const SCHEDULE_PRESETS = [
 ];
 
 function PromoteToCronModal({
-  task, onClose, onSuccess,
+  task, agents, onClose, onSuccess,
 }: {
   task: Task;
+  agents: RuntimeAgent[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [name, setName]               = useState(task.title);
-  const [agentId, setAgentId]         = useState(task.assignedAgentId ?? "main");
+  const [agentId, setAgentId]         = useState(task.assignedAgentId ?? agents[0]?.agentId ?? "");
   const [prompt, setPrompt]           = useState(task.description ?? "");
   const [schedulePreset, setPreset]   = useState("0 9 * * *");
   const [customCron, setCustomCron]   = useState("");
@@ -746,8 +760,8 @@ function PromoteToCronModal({
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
             >
-              {KNOWN_AGENTS.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+              {agents.map((a) => (
+                <option key={a.agentId} value={a.agentId}>{a.name ?? a.agentId}</option>
               ))}
             </select>
             {agentId && (

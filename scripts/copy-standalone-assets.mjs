@@ -46,12 +46,26 @@ if (existsSync(staticSrc)) {
   process.exit(1);
 }
 
+// ── Step 1b: copy skill/ into standalone so the install route can find it ────
+// The install API reads skill/SKILL.md from process.cwd() at runtime.
+// process.cwd() in production = the standalone-bundle directory, so we must
+// include skill/ there.
+
+const skillSrc = join(root, "skill");
+const skillDst = join(standalone, "skill");
+if (existsSync(skillSrc)) {
+  cpSync(skillSrc, skillDst, { recursive: true });
+  console.log("✅  Copied skill/");
+} else {
+  console.warn("⚠️   skill/ not found — skill install will fail at runtime");
+}
+
 // ── Step 2: create dereferenced bundle copy (no symlinks) ────────────────────
 // Tauri bundles resources by walking the directory; resolved symlinks ensure
 // that node_modules (pnpm symlink structure) are bundled correctly.
-// Runtime artifacts (data/, skill/) are excluded.
+// Runtime artifacts (data/) are excluded. skill/ IS included (see step 1b).
 
-const EXCLUDE = new Set(["data", "skill"]);
+const EXCLUDE = new Set(["data"]);
 
 if (existsSync(bundle)) {
   rmSync(bundle, { recursive: true, force: true });
