@@ -6,9 +6,9 @@
 
 | # | Item | Status |
 |---|------|--------|
-| 1 | **Approvals tab** — afișează regulile dar nu poți adăuga/edita/șterge din UI | 🔲 Todo |
-| 2 | **Channel test button** — buton "Test connection" pe canale (Discord, Telegram) | 🔲 Todo |
-| 3 | **Activity event detail** — click pe eveniment nu arată nimic; lipsește panel detalii | 🔲 Todo |
+| 1 | **Approvals tab** — afișează regulile dar nu poți adăuga/edita/șterge din UI | ✅ Done |
+| 2 | **Channel test button** — buton "Test connection" pe canale (Discord, Telegram) | ✅ Done |
+| 3 | **Activity event detail** — click pe eveniment nu arată nimic; lipsește panel detalii | ✅ Done |
 | 4 | **Task → Cron promotion** — workflow vizual să transformi un task în cron job | ✅ Done |
 | 5 | **Workspace file editor** — fișierele agentului editabile din app (Agents page) | ✅ Done |
 
@@ -18,11 +18,11 @@
 
 | # | Item | Status |
 |---|------|--------|
-| 1 | **Notificări macOS native** — cron pică / agent termină sesiune → notificare system (Tauri) | 🔲 Todo |
-| 2 | **"Run agent now"** — buton în Agents să trimiți prompt direct fără Discord | 🔲 Todo |
-| 3 | **Căutare globală ⌘K** — caută în tasks, schedules, memory, agents simultan | 🔲 Todo |
-| 4 | **Task comments** — thread/comentarii pe task, vizibil și agentului | 🔲 Todo |
-| 5 | **Export** — tasks și activity exportabile ca CSV sau JSON | 🔲 Todo |
+| 1 | **Notificări macOS native** — cron pică / agent termină sesiune → notificare system (Tauri) | ✅ Done |
+| 2 | **"Run agent now"** — buton în Agents să trimiți prompt direct fără Discord | ✅ Done |
+| 3 | **Căutare globală ⌘K** — caută în tasks, schedules, memory, agents simultan | ✅ Done |
+| 4 | **Task comments** — thread/comentarii pe task, vizibil și agentului | ✅ Done |
+| 5 | **Export** — tasks și activity exportabile ca CSV sau JSON | ✅ Done |
 
 ---
 

@@ -21,6 +21,7 @@ import {
   Zap,
   AlertTriangle,
   LogOut,
+  Package,
 } from "lucide-react";
 
 interface VersionInfo {
@@ -39,6 +40,7 @@ const navItems = [
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare     },
   { label: "Projects",  href: "/projects",  icon: FolderKanban    },
   { label: "Schedules", href: "/schedules", icon: CalendarClock   },
+  { label: "Skills",    href: "/skills",    icon: Package         },
   { label: "Models",    href: "/models",    icon: Cpu             },
   { label: "Memory",    href: "/memory",    icon: Brain           },
   { label: "Docs",      href: "/docs",      icon: FileText        },
