@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { DEFAULT_SLOT_METRICS } from "@/lib/dashboard-metrics";
+
+export interface SlotConfig {
+  metricId: string;
+  hidden: boolean;
+}
 
 export interface WidgetConfig {
   id: string;
@@ -8,16 +14,9 @@ export interface WidgetConfig {
 }
 
 export interface DashboardConfig {
-  statCards: WidgetConfig[];
+  slots: SlotConfig[];   // 4 configurable stat card slots
   panels: WidgetConfig[];
 }
-
-export const DEFAULT_STAT_CARDS: WidgetConfig[] = [
-  { id: "gateway",  hidden: false },
-  { id: "model",    hidden: false },
-  { id: "tasks",    hidden: false },
-  { id: "journal",  hidden: false },
-];
 
 export const DEFAULT_PANELS: WidgetConfig[] = [
   { id: "agents",    hidden: false },
@@ -26,13 +25,6 @@ export const DEFAULT_PANELS: WidgetConfig[] = [
   { id: "activity",  hidden: false },
 ];
 
-export const STAT_CARD_LABELS: Record<string, string> = {
-  gateway:  "Gateway",
-  model:    "Primary model",
-  tasks:    "Tasks",
-  journal:  "Journal today",
-};
-
 export const PANEL_LABELS: Record<string, string> = {
   agents:    "Agents",
   tasks:     "Active tasks",
@@ -40,41 +32,59 @@ export const PANEL_LABELS: Record<string, string> = {
   activity:  "Recent activity",
 };
 
-const STORAGE_KEY = "clawdesk:dashboard-config";
+const STORAGE_KEY = "clawdesk:dashboard-config-v2";
+
+function defaultConfig(): DashboardConfig {
+  return {
+    slots:  DEFAULT_SLOT_METRICS.map((metricId) => ({ metricId, hidden: false })),
+    panels: DEFAULT_PANELS,
+  };
+}
 
 function loadConfig(): DashboardConfig {
-  if (typeof window === "undefined") return { statCards: DEFAULT_STAT_CARDS, panels: DEFAULT_PANELS };
+  if (typeof window === "undefined") return defaultConfig();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { statCards: DEFAULT_STAT_CARDS, panels: DEFAULT_PANELS };
+    if (!raw) return defaultConfig();
     const parsed = JSON.parse(raw) as DashboardConfig;
-    // Merge with defaults to handle new widgets added in future versions
-    const mergeList = (saved: WidgetConfig[], defaults: WidgetConfig[]): WidgetConfig[] => {
-      const savedMap = new Map(saved.map((w) => [w.id, w]));
-      // Start with saved order, add any new defaults at the end
-      const result = saved.filter((w) => defaults.some((d) => d.id === w.id));
-      defaults.forEach((d) => { if (!savedMap.has(d.id)) result.push(d); });
-      return result;
-    };
-    return {
-      statCards: mergeList(parsed.statCards ?? [], DEFAULT_STAT_CARDS),
-      panels:    mergeList(parsed.panels    ?? [], DEFAULT_PANELS),
-    };
-  } catch { return { statCards: DEFAULT_STAT_CARDS, panels: DEFAULT_PANELS }; }
+    // Ensure we always have exactly 4 slots
+    const slots = (parsed.slots ?? []).slice(0, 4);
+    while (slots.length < 4) slots.push({ metricId: "tasks-active", hidden: false });
+    // Merge panels with defaults
+    const savedPanelMap = new Map((parsed.panels ?? []).map((w) => [w.id, w]));
+    const panels = DEFAULT_PANELS.map((d) => savedPanelMap.get(d.id) ?? d);
+    // Preserve saved order
+    const savedOrder = (parsed.panels ?? []).filter((w) => panels.some((p) => p.id === w.id));
+    const finalPanels = savedOrder.length === panels.length ? savedOrder : panels;
+    return { slots, panels: finalPanels };
+  } catch { return defaultConfig(); }
 }
 
 export function useDashboardConfig() {
   const [config, setConfig] = useState<DashboardConfig>(() => loadConfig());
 
-  // Persist to localStorage on every change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }, [config]);
 
-  const toggleWidget = useCallback((section: "statCards" | "panels", id: string) => {
+  const setSlotMetric = useCallback((slotIdx: number, metricId: string) => {
+    setConfig((prev) => {
+      const slots = prev.slots.map((s, i) => i === slotIdx ? { ...s, metricId } : s);
+      return { ...prev, slots };
+    });
+  }, []);
+
+  const toggleSlot = useCallback((slotIdx: number) => {
+    setConfig((prev) => {
+      const slots = prev.slots.map((s, i) => i === slotIdx ? { ...s, hidden: !s.hidden } : s);
+      return { ...prev, slots };
+    });
+  }, []);
+
+  const togglePanel = useCallback((id: string) => {
     setConfig((prev) => ({
       ...prev,
-      [section]: prev[section].map((w) => w.id === id ? { ...w, hidden: !w.hidden } : w),
+      panels: prev.panels.map((w) => w.id === id ? { ...w, hidden: !w.hidden } : w),
     }));
   }, []);
 
@@ -90,9 +100,7 @@ export function useDashboardConfig() {
     });
   }, []);
 
-  const reset = useCallback(() => {
-    setConfig({ statCards: DEFAULT_STAT_CARDS, panels: DEFAULT_PANELS });
-  }, []);
+  const reset = useCallback(() => setConfig(defaultConfig()), []);
 
-  return { config, toggleWidget, movePanel, reset };
+  return { config, setSlotMetric, toggleSlot, togglePanel, movePanel, reset };
 }
