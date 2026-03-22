@@ -50,7 +50,7 @@ ARCH=$(uname -m)   # arm64 or x86_64
 ASSET="ClawDesk_${VERSION}_${ARCH}.app.tar.gz"
 
 echo "▶ Packing $ASSET..."
-tar -czf "$BUNDLE_DIR/$ASSET" -C "$BUNDLE_DIR" "ClawDesk.app"
+COPYFILE_DISABLE=1 tar -czf "$BUNDLE_DIR/$ASSET" -C "$BUNDLE_DIR" "ClawDesk.app"
 
 echo "▶ Signing..."
 TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" \

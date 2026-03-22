@@ -4,6 +4,25 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
+## [0.5.2] — 2026-03-22
+
+### Fixed
+- **Auto-updater fails silently** — installer errors are now shown in the UI instead of being swallowed; users see the exact error message (e.g. `failed to unpack ._ClawDesk.app`) instead of the button reverting to "Update Now" with no feedback
+- **macOS release archive includes `._*` metadata files** — added `COPYFILE_DISABLE=1` to the `release.sh` tar command; without this, macOS silently embeds AppleDouble metadata files that cause the Tauri updater to fail unpacking
+- **OpenClaw agents can't call ClawDesk API from cron jobs** — the OpenClaw sandbox blocks web_fetch to private/localhost IPs (hardcoded SSRF policy); updated cron job prompts to use `sqlite3` and `openclaw` CLI directly instead of HTTP calls to `localhost:3131`
+- **Scout agent cron blocked on exec approval** — exec approval notifications were sent to Discord DM which was failing; added `agentFilter` to `execApprovals` so Scout (cron-only agent) runs without requiring interactive approval
+- **`OLLAMA_API_KEY` missing from daemon environment** — OpenClaw LaunchAgent runs isolated from shell; added `OLLAMA_API_KEY=ollama-local` and `OLLAMA_BASE_URL` to the plist `EnvironmentVariables` so Ollama models are available to cron agents
+
+### Added
+- **`deploy:local` script** — fast local iteration without full Tauri rebuild: builds Next.js, rsyncs the bundle into `/Applications/ClawDesk.app`, and re-signs in one command (`pnpm deploy:local`)
+- **Linux support** — `.deb` and `.AppImage` bundle targets; cross-platform binary detection for Node.js (`/usr/bin/nodejs`, `/snap/bin/node`, `which` fallback) and OpenClaw (`~/.local/bin`, `/snap/bin`, npm global prefix); platform-aware `cliEnv()` PATH builder and `where`/`which` detection
+
+### Changed
+- `scripts/release.sh` now uses `COPYFILE_DISABLE=1` for all tar operations
+- `UpdateBanner` now shows the install error inline below the banner
+
+---
+
 ## [0.5.1] — 2026-03-22
 
 ### Fixed

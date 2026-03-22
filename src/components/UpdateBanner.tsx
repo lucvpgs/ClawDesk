@@ -20,6 +20,7 @@ export function UpdateBanner() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -42,12 +43,14 @@ export function UpdateBanner() {
 
   async function handleInstall() {
     setInstalling(true);
+    setInstallError(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("install_update");
       // app restarts automatically after this
     } catch (e) {
-      console.error("Update failed:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setInstallError(msg);
       setInstalling(false);
     }
   }
@@ -85,6 +88,12 @@ export function UpdateBanner() {
       >
         <X className="h-3.5 w-3.5" />
       </button>
+
+      {installError && (
+        <div className="absolute bottom-full mb-2 right-0 max-w-sm rounded-lg border border-red-500/30 bg-zinc-900 px-3 py-2 text-[10px] text-red-400 shadow-lg">
+          {installError}
+        </div>
+      )}
     </div>
   );
 }

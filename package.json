@@ -13,6 +13,7 @@
     "tauri:dev": "pnpm tauri dev",
     "tauri:build": "pnpm tauri build",
     "build:desktop": "next build && node scripts/copy-standalone-assets.mjs",
+    "deploy:local": "pnpm build:desktop && rsync -a --delete .next/standalone-bundle/ /Applications/ClawDesk.app/Contents/Resources/server/ && codesign --force --deep --sign - /Applications/ClawDesk.app && echo '✅ Deployed to /Applications — restart ClawDesk'",
     "smoke-test": "node scripts/smoke-test-bundle.mjs",
     "build:release": "pnpm build:desktop && pnpm smoke-test"
   },

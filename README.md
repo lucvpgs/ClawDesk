@@ -2,6 +2,8 @@
 
 A native desktop app for [OpenClaw](https://openclaw.ai) — manage your agents, tasks, schedules, models, channels and memory from a clean UI.
 
+> **v0.5.2** — Linux support, auto-updater error display, cron agent compatibility fix, macOS release archive fix.
+
 ![Tauri](https://img.shields.io/badge/Tauri-v2-blue) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![SQLite](https://img.shields.io/badge/SQLite-local-blue) ![OpenClaw](https://img.shields.io/badge/OpenClaw-required-violet)
 
 | Platform | Status | Notes |
@@ -136,6 +138,18 @@ curl -X POST http://localhost:3131/api/tasks \
 
 Tasks created this way appear instantly in the ClawDesk UI.
 
+> **Note for cron / scheduled agents:** OpenClaw's sandbox blocks `web_fetch` to `localhost` (hardcoded SSRF policy — not configurable). For read-only queries from cron jobs, use `sqlite3` directly on the ClawDesk database or `openclaw` CLI instead of HTTP:
+>
+> ```bash
+> # Read tasks from cron agent
+> sqlite3 "$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db" \
+>   "SELECT count(*) FROM tasks WHERE status='pending'"
+>
+> # On Linux
+> sqlite3 "$HOME/.local/share/com.vpgs.clawdesk/clawdesk.db" \
+>   "SELECT count(*) FROM tasks WHERE status='pending'"
+> ```
+
 ### OpenClaw skill
 
 The skill is installed automatically during onboarding — click **"Install skill"** on the "What's next" screen after connecting to OpenClaw. No manual steps needed.
@@ -186,3 +200,11 @@ PATH="$HOME/.cargo/bin:$PATH" pnpm tauri dev   # Tauri window pointing to dev se
 - `.env.local` is never committed — each installation has its own credentials
 - Tested on macOS (Apple Silicon) and Ubuntu 22.04 (x86_64)
 - Windows support is planned — binary path detection and PATH separator handling are implemented but the release pipeline and installer are not yet ready
+
+## Known limitations
+
+| Limitation | Workaround |
+|-----------|------------|
+| OpenClaw cron agents can't call `localhost:3131` via `web_fetch` (SSRF policy) | Use `sqlite3` on the ClawDesk DB or `openclaw` CLI from cron prompts |
+| Auto-updater requires manually quitting and relaunching the app | Quit ClawDesk after "Update Now" completes, then relaunch |
+| Ollama models unavailable to cron agents on macOS | Add `OLLAMA_API_KEY=ollama-local` to LaunchAgent plist `EnvironmentVariables` |
