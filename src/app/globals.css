@@ -42,17 +42,41 @@ html.light {
   --background:    #f5f1eb;
   --foreground:    #1c1714;
 
-  /* Zinc scale — warm cream palette (dark→light, light→dark) */
-  --color-zinc-950: #f5f1eb;   /* body bg         — warm cream            */
+  /* ── Zinc scale — warm cream palette (dark→light, light→dark) ── */
+  --color-zinc-950: #f5f1eb;   /* body bg          — warm cream            */
   --color-zinc-900: #ece7de;   /* card bg          — slightly darker       */
   --color-zinc-800: #ddd7cd;   /* card inner/code  — borders, inputs       */
   --color-zinc-700: #c8c0b6;   /* subtle borders                           */
-  --color-zinc-600: #9e948a;   /* secondary labels (uppercase headers)     */
+  --color-zinc-600: #9e948a;   /* secondary labels                         */
   --color-zinc-500: #7d7068;   /* muted text                               */
   --color-zinc-400: #5c524d;   /* medium text                              */
   --color-zinc-300: #3d3530;   /* stronger text                            */
   --color-zinc-200: #2c2420;   /* dark text                                */
   --color-zinc-100: #1c1714;   /* primary text     — near-black warm       */
+
+  /* ── Color accents — darken "light" shades so they're readable on cream ──
+     300-level (pastels) → 700 equivalent
+     400-level (medium)  → 600 equivalent                                   */
+  --color-violet-300:  #6d28d9;
+  --color-violet-400:  #7c3aed;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-amber-300:   #b45309;
+  --color-amber-400:   #d97706;
+  --color-blue-300:    #1d4ed8;
+  --color-blue-400:    #2563eb;
+  --color-red-300:     #b91c1c;
+  --color-red-400:     #dc2626;
+  --color-pink-300:    #be185d;
+  --color-pink-400:    #db2777;
+  --color-indigo-300:  #3730a3;
+  --color-indigo-400:  #4f46e5;
+  --color-teal-300:    #0f766e;
+  --color-teal-400:    #0d9488;
+  --color-orange-300:  #c2410c;
+  --color-orange-400:  #ea580c;
+  --color-rose-300:    #be123c;
+  --color-rose-400:    #e11d48;
 }
 
 html.light body {
@@ -60,11 +84,22 @@ html.light body {
   color: var(--foreground);
 }
 
+/* ── Fix: text-zinc-900 is used on colored avatar circles (bg-violet-600 etc.)
+   In light mode --color-zinc-900 is cream → text becomes invisible.
+   Override just the TEXT usage to near-black, without affecting bg-zinc-900.  */
+html.light .text-zinc-900 { color: #1c1714 !important; }
+
+/* ── Fix: borders need slightly more contrast on the warm cream background
+   Darken the main border shades so cards/inputs are clearly outlined.        */
+html.light .border-zinc-800  { border-color: #c4bdb4 !important; }
+html.light .border-zinc-700  { border-color: #b0a8a0 !important; }
+html.light .divide-zinc-800\/60 > * + * { border-color: #d0c9c0 !important; }
+
+/* ── Fix: bg-zinc-800/60 & similar used for "selected/active" states
+   Make them slightly darker so they're distinguishable from card bg.         */
+html.light .bg-zinc-800\/60 { background-color: rgb(196 189 180 / 0.6) !important; }
+html.light .bg-zinc-800\/30 { background-color: rgb(196 189 180 / 0.3) !important; }
+
 /* Scrollbar — light */
 html.light ::-webkit-scrollbar-thumb { background: #c8c0b6; border-radius: 2px; }
 html.light ::-webkit-scrollbar-thumb:hover { background: #9e948a; }
-
-/* Code / mono backgrounds look better slightly more opaque in light mode */
-html.light .font-mono {
-  letter-spacing: -0.01em;
-}
