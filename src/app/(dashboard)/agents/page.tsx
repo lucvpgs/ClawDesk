@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bot, Activity, Cpu, RefreshCw, Crown, Plus, X,
   FileText, ChevronRight, Save, Trash2, AlertCircle,
-  Package, ExternalLink,
+  Package, ExternalLink, Send, Loader2, CheckCircle2, XCircle,
 } from "lucide-react";
 import { cn, statusDot } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName } from "@/lib/agent-colors";
@@ -51,8 +51,9 @@ interface WorkspaceFile {
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function AgentsPage() {
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [selectedId, setSelectedId]       = useState<string | null>(null);
+  const [showCreate, setShowCreate]       = useState(false);
+  const [runAgentFor, setRunAgentFor]     = useState<AgentData | null>(null);
 
   const { data: runtimeData, isLoading, refetch } = useQuery<{ agents: AgentData[] }>({
     queryKey: ["agents"],
@@ -112,6 +113,7 @@ export default function AgentsPage() {
                 isPrincipal
                 onSelect={() => setSelectedId(mainAgent.agentId)}
                 selected={selectedId === mainAgent.agentId}
+                onRun={() => setRunAgentFor(mainAgent)}
               />
             </div>
           )}
@@ -130,6 +132,7 @@ export default function AgentsPage() {
                     isPrincipal={false}
                     onSelect={() => setSelectedId(agent.agentId)}
                     selected={selectedId === agent.agentId}
+                    onRun={() => setRunAgentFor(agent)}
                   />
                 ))}
               </div>
@@ -149,6 +152,14 @@ export default function AgentsPage() {
         />
       )}
 
+      {/* Run agent modal */}
+      {runAgentFor && (
+        <RunAgentModal
+          agent={runAgentFor}
+          onClose={() => setRunAgentFor(null)}
+        />
+      )}
+
       {/* Create agent modal */}
       {showCreate && (
         <CreateAgentModal
@@ -164,13 +175,14 @@ export default function AgentsPage() {
 
 // ── Agent Card ────────────────────────────────────────────────────────────────
 function AgentCard({
-  agent, config, isPrincipal, onSelect, selected,
+  agent, config, isPrincipal, onSelect, selected, onRun,
 }: {
   agent: AgentData;
   config?: AgentConfig;
   isPrincipal: boolean;
   onSelect: () => void;
   selected: boolean;
+  onRun: () => void;
 }) {
   const accent = agentAccent(agent.agentId);
   const emoji  = config?.identity?.emoji ?? null;
@@ -209,6 +221,13 @@ function AgentCard({
 
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-[10px] text-zinc-500 font-mono hidden sm:block">{agent.agentId}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRun(); }}
+            className="p-1.5 rounded text-zinc-600 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+            title="Run agent"
+          >
+            <Send className="w-3 h-3" />
+          </button>
           <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
         </div>
       </div>
@@ -684,6 +703,169 @@ function AgentDetailPanel({
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Run Agent Modal ───────────────────────────────────────────────────────────
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+type ThinkingLevel = typeof THINKING_LEVELS[number];
+
+function RunAgentModal({ agent, onClose }: { agent: AgentData; onClose: () => void }) {
+  const accent = agentAccent(agent.agentId);
+  const [message,  setMessage]  = useState("");
+  const [thinking, setThinking] = useState<ThinkingLevel>("off");
+  const [running,  setRunning]  = useState(false);
+  const [result,   setResult]   = useState<{ reply?: string; raw?: unknown } | null>(null);
+  const [error,    setError]    = useState<string | null>(null);
+
+  async function handleRun() {
+    if (!message.trim()) return;
+    setRunning(true);
+    setResult(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/agents/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.agentId, message: message.trim(), thinking }),
+      });
+      const data = await res.json() as { ok?: boolean; result?: unknown; error?: string };
+      if (!res.ok || data.error) {
+        setError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      // Extract reply text from result — openclaw agent --json shape varies
+      const r = data.result as Record<string, unknown> | null;
+      const reply =
+        (r?.reply as string | undefined) ??
+        (r?.message as string | undefined) ??
+        (r?.content as string | undefined) ??
+        (r?.text as string | undefined);
+      setResult({ reply: reply ?? undefined, raw: r });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleRun();
+    }
+    if (e.key === "Escape") onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-[520px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={cn("flex items-center gap-3 px-5 py-3.5 border-b border-zinc-800 border-l-4 rounded-tl-xl shrink-0", accent.border)}>
+          <span className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-zinc-900 shrink-0", accent.avatar)}>
+            {agent.name ? agent.name[0].toUpperCase() : agent.agentId[0].toUpperCase()}
+          </span>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-semibold text-zinc-100">{agent.name ?? agent.agentId}</span>
+            <span className="text-[10px] text-zinc-600 font-mono ml-2">{agent.agentId}</span>
+          </div>
+          <button onClick={onClose} className="p-1 text-zinc-600 hover:text-zinc-400">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {/* Prompt input */}
+          <div>
+            <label className="text-[10px] text-zinc-600 uppercase tracking-wider">Message</label>
+            <textarea
+              autoFocus
+              rows={5}
+              className="w-full mt-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-violet-500 resize-none font-mono leading-relaxed"
+              placeholder="What should the agent do?"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={running}
+            />
+            <p className="text-[10px] text-zinc-700 mt-1">⌘↵ to send · Esc to close</p>
+          </div>
+
+          {/* Thinking level */}
+          <div>
+            <label className="text-[10px] text-zinc-600 uppercase tracking-wider">Thinking</label>
+            <div className="flex gap-1.5 mt-1 flex-wrap">
+              {THINKING_LEVELS.map((lvl) => (
+                <button
+                  key={lvl}
+                  onClick={() => setThinking(lvl)}
+                  className={cn(
+                    "text-[10px] px-2.5 py-1 rounded border transition-colors font-mono",
+                    thinking === lvl
+                      ? "bg-violet-900/40 text-violet-300 border-violet-700/50"
+                      : "bg-zinc-900 text-zinc-600 border-zinc-800 hover:border-zinc-600"
+                  )}
+                >
+                  {lvl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="flex items-start gap-2 bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2.5">
+              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-red-400 break-all">{error}</span>
+            </div>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] text-emerald-400 uppercase tracking-wider">Reply</span>
+              </div>
+              {result.reply ? (
+                <pre className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-xs text-zinc-300 whitespace-pre-wrap break-words font-mono leading-relaxed max-h-64 overflow-y-auto">
+                  {result.reply}
+                </pre>
+              ) : (
+                <pre className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-[10px] text-zinc-500 whitespace-pre-wrap break-all font-mono max-h-64 overflow-y-auto">
+                  {JSON.stringify(result.raw, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-zinc-800 shrink-0 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 text-xs border border-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-lg transition-colors"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleRun}
+            disabled={running || !message.trim()}
+            className="flex-1 flex items-center justify-center gap-2 py-2 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {running
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running…</>
+              : <><Send className="w-3.5 h-3.5" /> Run agent</>
+            }
+          </button>
+        </div>
       </div>
     </div>
   );
