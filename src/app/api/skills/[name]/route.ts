@@ -1,6 +1,6 @@
 /**
- * DELETE /api/skills/[name]
- * Permanently removes a workspace skill from disk:
+ * GET  /api/skills/[name]  — returns raw SKILL.md content from workspace
+ * DELETE /api/skills/[name] — permanently removes a workspace skill from disk:
  *   ~/.openclaw/workspace/skills/<name>/
  * Also removes it from all agents' skills arrays in openclaw.json.
  */
@@ -11,6 +11,22 @@ import path from "path";
 
 const WORKSPACE_SKILLS = path.join(homedir(), ".openclaw", "workspace", "skills");
 const CONFIG_PATH      = path.join(homedir(), ".openclaw", "openclaw.json");
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ name: string }> }
+) {
+  const { name } = await params;
+  if (!name || !/^[\w-]+$/.test(name)) {
+    return NextResponse.json({ ok: false, error: "Invalid skill name" }, { status: 400 });
+  }
+  const skillFile = path.join(WORKSPACE_SKILLS, name, "SKILL.md");
+  if (!existsSync(skillFile)) {
+    return NextResponse.json({ ok: false, error: "Skill not found in workspace" }, { status: 404 });
+  }
+  const content = readFileSync(skillFile, "utf-8");
+  return NextResponse.json({ ok: true, name, content });
+}
 
 export async function DELETE(
   _req: NextRequest,

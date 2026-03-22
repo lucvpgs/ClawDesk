@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Plus, X, ChevronRight, Bot, Crown, ExternalLink,
-  Github, Loader2, Download, Trash2,
+  Github, Loader2, Download, Trash2, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentInitial } from "@/lib/agent-colors";
@@ -148,6 +148,65 @@ function GitHubInstallModal({
   );
 }
 
+// ── Skill Content Viewer Modal ────────────────────────────────────────────────
+function SkillViewerModal({ skillName, onClose }: { skillName: string; onClose: () => void }) {
+  const { data, isLoading } = useQuery<{ ok: boolean; content: string }>({
+    queryKey: ["skill-content", skillName],
+    queryFn: () => fetch(`/api/skills/${encodeURIComponent(skillName)}`).then((r) => r.json()),
+    staleTime: 60_000,
+  });
+
+  // Split frontmatter from body
+  const raw = data?.content ?? "";
+  const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  const frontmatter = fmMatch ? fmMatch[1] : null;
+  const body = fmMatch ? fmMatch[2] : raw;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-zinc-950 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-zinc-800 shrink-0">
+          <FileText className="w-4 h-4 text-violet-400 shrink-0" />
+          <span className="text-sm font-medium text-zinc-100 font-mono">{skillName}</span>
+          <span className="text-[10px] text-zinc-600 ml-1">SKILL.md</span>
+          <button onClick={onClose} className="ml-auto text-zinc-600 hover:text-zinc-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-xs text-zinc-600">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+            </div>
+          ) : !data?.ok ? (
+            <div className="py-12 text-center text-xs text-red-400">Could not load skill content.</div>
+          ) : (
+            <>
+              {/* Frontmatter */}
+              {frontmatter && (
+                <div className="px-5 py-3 bg-violet-950/20 border-b border-violet-900/30">
+                  <p className="text-[9px] uppercase tracking-wider text-violet-600 mb-1.5">Frontmatter</p>
+                  <pre className="text-[11px] text-violet-300 font-mono whitespace-pre-wrap leading-relaxed">{frontmatter}</pre>
+                </div>
+              )}
+              {/* Body */}
+              <div className="px-5 py-4">
+                <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap leading-relaxed">{body.trim()}</pre>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Delete confirmation popover (inline) ─────────────────────────────────────
 function DeleteConfirm({ skillName, onConfirm, onCancel }: { skillName: string; onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -172,6 +231,7 @@ export default function SkillsPage() {
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewingSkill, setViewingSkill] = useState<string | null>(null);
 
   const { data: skillsData, isLoading: skillsLoading, refetch: refetchSkills } = useQuery<{
     skills: SkillEntry[];
@@ -267,6 +327,10 @@ export default function SkillsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
+
+      {viewingSkill && (
+        <SkillViewerModal skillName={viewingSkill} onClose={() => setViewingSkill(null)} />
+      )}
 
       {showGitHubModal && (
         <GitHubInstallModal
@@ -565,25 +629,34 @@ export default function SkillsPage() {
                           {assigned ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                         </button>
 
-                        {/* Delete from disk — workspace skills only */}
+                        {/* View + delete — workspace skills only */}
                         {inWorkspace && (
-                          <div className="relative">
+                          <>
                             <button
-                              onClick={() => setConfirmDelete(confirmDelete === skill.name ? null : skill.name)}
-                              disabled={deleting}
-                              className="p-1 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
-                              title="Delete from workspace (removes file from disk)"
+                              onClick={() => setViewingSkill(skill.name)}
+                              className="p-1 text-zinc-700 hover:text-violet-400 transition-colors"
+                              title="View SKILL.md"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <FileText className="w-3.5 h-3.5" />
                             </button>
-                            {confirmDelete === skill.name && (
-                              <DeleteConfirm
-                                skillName={skill.name}
-                                onConfirm={() => deleteSkill(skill.name)}
-                                onCancel={() => setConfirmDelete(null)}
-                              />
-                            )}
-                          </div>
+                            <div className="relative">
+                              <button
+                                onClick={() => setConfirmDelete(confirmDelete === skill.name ? null : skill.name)}
+                                disabled={deleting}
+                                className="p-1 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                                title="Delete from workspace (removes file from disk)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              {confirmDelete === skill.name && (
+                                <DeleteConfirm
+                                  skillName={skill.name}
+                                  onConfirm={() => deleteSkill(skill.name)}
+                                  onCancel={() => setConfirmDelete(null)}
+                                />
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
