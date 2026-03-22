@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentDisplayName } from "@/lib/agent-colors";
+import { ProGate } from "@/components/ProGate";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface CostSummary {
@@ -253,6 +254,7 @@ export default function CostPage() {
   const byDay    = data?.byDay    ?? [];
 
   return (
+    <ProGate feature="Cost Tracker">
     <div className="max-w-5xl mx-auto space-y-5">
       {showRates && <RatesModal onClose={() => setShowRates(false)} />}
 
@@ -390,5 +392,6 @@ export default function CostPage() {
         </>
       )}
     </div>
+    </ProGate>
   );
 }

@@ -11,6 +11,7 @@ import {
 import { OrchestrationGraph } from "@/components/OrchestrationGraph";
 import { cn, statusDot } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName } from "@/lib/agent-colors";
+import { ProGate } from "@/components/ProGate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgentData {
@@ -588,6 +589,7 @@ function AgentDetailPanel({
 
           {/* ── Budget tab ── */}
                 {tab === "budget" && (
+                  <ProGate feature="Token Budget Alerts" blur>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-400">Daily budget (USD)</label>
@@ -617,6 +619,7 @@ function AgentDetailPanel({
                       </div>
                     )}
                   </div>
+                  </ProGate>
                 )}
 
           {/* ── Files tab ── */}

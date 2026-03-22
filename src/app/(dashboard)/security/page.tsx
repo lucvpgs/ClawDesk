@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { ProGate } from "@/components/ProGate";
 
 type CheckStatus = "ok" | "warn" | "fail" | "unknown";
 
@@ -108,6 +109,7 @@ export default function SecurityPage() {
   const sorted = [...issues, ...warnings, ...unknown, ...ok];
 
   return (
+    <ProGate feature="Security Health Panel">
     <div className="max-w-2xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -163,6 +165,7 @@ export default function SecurityPage() {
         </>
       )}
     </div>
+    </ProGate>
   );
 }
 

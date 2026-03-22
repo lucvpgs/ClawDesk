@@ -2,6 +2,10 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { NotificationWatcher } from "@/components/NotificationWatcher";
 
+// Force dynamic rendering for all dashboard pages — avoids RSC manifest
+// issues with complex client component chains and allows runtime data fetching
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({
   children,
 }: {

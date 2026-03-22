@@ -4,12 +4,13 @@ import { useRuntimeStore } from "@/lib/store";
 import { statusDot } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useAutoSync } from "@/hooks/use-auto-sync";
-import { RefreshCw, Search, Sun, Moon } from "lucide-react";
+import { RefreshCw, Search, Sun, Moon, KeyRound, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CommandPalette, useCommandPalette } from "@/components/CommandPalette";
 import { useTheme } from "@/components/ThemeProvider";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useLicenseContext } from "@/contexts/LicenseContext";
 
 export function Topbar() {
   const { activeRuntime } = useRuntimeStore();
@@ -17,6 +18,7 @@ export function Topbar() {
   const [syncing, setSyncing] = useState(false);
   const { open, setOpen } = useCommandPalette();
   const { theme, toggle } = useTheme();
+  const { isPro, openModal } = useLicenseContext();
 
   useAutoSync();
 
@@ -79,6 +81,27 @@ export function Topbar() {
             : <Moon className="w-3.5 h-3.5" />
           }
         </button>
+
+        {/* Pro badge / upgrade button */}
+        {isPro ? (
+          <button
+            onClick={openModal}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-violet-600/15 border border-violet-700/40 text-violet-300 text-[10px] font-medium hover:bg-violet-600/25 transition-colors"
+            title="ClawDesk Pro — click to manage license"
+          >
+            <Sparkles className="w-3 h-3" />
+            Pro
+          </button>
+        ) : (
+          <button
+            onClick={openModal}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-zinc-700 text-zinc-500 text-[10px] font-medium hover:border-violet-700 hover:text-violet-400 transition-colors"
+            title="Upgrade to ClawDesk Pro"
+          >
+            <KeyRound className="w-3 h-3" />
+            Upgrade
+          </button>
+        )}
 
         {/* Notification bell */}
         <NotificationBell />
