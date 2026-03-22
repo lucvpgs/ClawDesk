@@ -5,12 +5,38 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Cpu, Bot, Activity, RefreshCw, Plus, Star, GitBranch,
   Trash2, ChevronRight, Check, Eye, EyeOff, X, AlertTriangle,
-  Download, Loader2, CheckCircle2, XCircle,
+  Download, Loader2, CheckCircle2, XCircle, FlaskConical,
+  Wrench, Copy, Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_CATALOG, type ProviderDef, type PresetModel } from "@/lib/model-providers";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface CheckResult {
+  id: string;
+  label: string;
+  ok: boolean;
+  message?: string;
+}
+
+interface FixInfo {
+  type: string;
+  title: string;
+  message: string;
+  autoFixable: boolean;
+  command?: string;
+  editableField?: { key: string; label: string; value: string; placeholder: string };
+}
+
+interface TestResult {
+  ok: boolean;
+  latencyMs: number;
+  provider: string;
+  modelId: string;
+  checks: CheckResult[];
+  fix?: FixInfo;
+}
 
 interface ConfiguredProvider {
   id: string;
@@ -272,6 +298,8 @@ function ProviderCard({
               key={modelId}
               modelId={modelId}
               modelKey={key}
+              provider={provider.id}
+              providerBaseUrl={provider.baseUrl ?? undefined}
               isPrimary={isPrimary}
               isFallback={isFallback}
               onSetPrimary={() => onSetPrimary(key)}
@@ -288,70 +316,253 @@ function ProviderCard({
 // ── Model row ─────────────────────────────────────────────────────────────────
 
 function ModelRow({
-  modelId, isPrimary, isFallback, onSetPrimary, onToggleFallback, onRemove,
+  modelId, provider, providerBaseUrl, isPrimary, isFallback,
+  onSetPrimary, onToggleFallback, onRemove,
 }: {
   modelId: string;
   modelKey: string;
+  provider: string;
+  providerBaseUrl?: string;
   isPrimary: boolean;
   isFallback: boolean;
   onSetPrimary: () => void;
   onToggleFallback: () => void;
   onRemove: () => void;
 }) {
+  const [testState, setTestState] = useState<"idle" | "loading" | "done">("idle");
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [fixing, setFixing] = useState(false);
+  const [fixResult, setFixResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function runTest() {
+    setTestState("loading");
+    setTestResult(null);
+    setFixResult(null);
+    try {
+      const res = await fetch("/api/models/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, modelId }),
+      });
+      const data = await res.json() as TestResult;
+      setTestResult(data);
+    } catch {
+      setTestResult({
+        ok: false, latencyMs: 0, provider, modelId,
+        checks: [{ id: "error", label: "Test failed", ok: false, message: "Could not reach test endpoint" }],
+      });
+    }
+    setTestState("done");
+  }
+
+  async function runFix(type: string) {
+    setFixing(true);
+    setFixResult(null);
+    try {
+      const res = await fetch("/api/models/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json() as { ok: boolean; message: string; restarting?: boolean };
+      setFixResult(data);
+      if (data.ok) {
+        // Re-test after a short delay to let the service restart
+        setTimeout(() => runTest(), data.restarting ? 5000 : 1000);
+      }
+    } catch (e) {
+      setFixResult({ ok: false, message: String(e) });
+    }
+    setFixing(false);
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const showPanel = testState === "done" && testResult !== null;
+
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20 transition-colors group">
-      <Cpu className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
-      <span className="text-xs font-mono text-zinc-200 flex-1 truncate">{modelId}</span>
+    <div className="group">
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20 transition-colors">
+        <Cpu className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+        <span className="text-xs font-mono text-zinc-200 flex-1 truncate">{modelId}</span>
 
-      {/* Badges */}
-      <div className="flex items-center gap-1.5">
-        {isPrimary && (
-          <span className="flex items-center gap-1 text-[10px] bg-violet-900/40 text-violet-300 border border-violet-700/40 px-1.5 py-0.5 rounded">
-            <Star className="w-2.5 h-2.5" />
-            primary
-          </span>
+        {/* Test status badge */}
+        {testState === "loading" && (
+          <Loader2 className="w-3.5 h-3.5 text-zinc-500 animate-spin shrink-0" />
         )}
-        {isFallback && !isPrimary && (
-          <span className="flex items-center gap-1 text-[10px] bg-blue-900/30 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded">
-            <GitBranch className="w-2.5 h-2.5" />
-            fallback
-          </span>
-        )}
-      </div>
-
-      {/* Actions — visible on hover */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {!isPrimary && (
-          <button
-            onClick={onSetPrimary}
-            title="Set as primary"
-            className="flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-400 hover:text-violet-300 hover:bg-violet-900/20 rounded transition-colors"
+        {testState === "done" && testResult && (
+          <span
+            className={cn(
+              "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border cursor-pointer",
+              testResult.ok
+                ? "text-emerald-400 bg-emerald-900/20 border-emerald-800/40"
+                : "text-red-400 bg-red-900/20 border-red-800/40"
+            )}
+            onClick={() => setTestState(testState === "done" ? "idle" : "done")}
+            title={testResult.ok ? "Model is healthy" : "Click to see details"}
           >
-            <Star className="w-3 h-3" />
-            primary
-          </button>
+            {testResult.ok
+              ? <><CheckCircle2 className="w-2.5 h-2.5" />{testResult.latencyMs}ms</>
+              : <><XCircle className="w-2.5 h-2.5" />issues found</>
+            }
+          </span>
         )}
-        <button
-          onClick={onToggleFallback}
-          title={isFallback ? "Remove from fallbacks" : "Add as fallback"}
-          className={cn(
-            "flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-colors",
-            isFallback
-              ? "text-blue-400 hover:text-zinc-400 hover:bg-zinc-800/40"
-              : "text-zinc-400 hover:text-blue-300 hover:bg-blue-900/20"
+
+        {/* Badges */}
+        <div className="flex items-center gap-1.5">
+          {isPrimary && (
+            <span className="flex items-center gap-1 text-[10px] bg-violet-900/40 text-violet-300 border border-violet-700/40 px-1.5 py-0.5 rounded">
+              <Star className="w-2.5 h-2.5" />primary
+            </span>
           )}
-        >
-          <GitBranch className="w-3 h-3" />
-          {isFallback ? "unfallback" : "fallback"}
-        </button>
-        <button
-          onClick={onRemove}
-          title="Remove model"
-          className="p-1 text-zinc-600 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
+          {isFallback && !isPrimary && (
+            <span className="flex items-center gap-1 text-[10px] bg-blue-900/30 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded">
+              <GitBranch className="w-2.5 h-2.5" />fallback
+            </span>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={runTest}
+            disabled={testState === "loading"}
+            title="Test model"
+            className="flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-amber-900/20 rounded transition-colors disabled:opacity-50"
+          >
+            <FlaskConical className="w-3 h-3" />
+            test
+          </button>
+          {!isPrimary && (
+            <button onClick={onSetPrimary} title="Set as primary"
+              className="flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-400 hover:text-violet-300 hover:bg-violet-900/20 rounded transition-colors">
+              <Star className="w-3 h-3" />primary
+            </button>
+          )}
+          <button onClick={onToggleFallback}
+            title={isFallback ? "Remove from fallbacks" : "Add as fallback"}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-colors",
+              isFallback
+                ? "text-blue-400 hover:text-zinc-400 hover:bg-zinc-800/40"
+                : "text-zinc-400 hover:text-blue-300 hover:bg-blue-900/20"
+            )}>
+            <GitBranch className="w-3 h-3" />{isFallback ? "unfallback" : "fallback"}
+          </button>
+          <button onClick={onRemove} title="Remove model"
+            className="p-1 text-zinc-600 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
+
+      {/* Test result panel */}
+      {showPanel && testResult && (
+        <div className="mx-4 mb-3 rounded-lg border border-zinc-700/50 bg-zinc-950/80 overflow-hidden">
+          {/* Checks list */}
+          <div className="px-3 py-2.5 space-y-1.5">
+            {testResult.checks.map((check) => (
+              <div key={check.id} className="flex items-start gap-2">
+                {check.ok
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                }
+                <div>
+                  <span className="text-xs text-zinc-300">{check.label}</span>
+                  {check.message && (
+                    <p className="text-[11px] text-zinc-500 mt-0.5">{check.message}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Fix section */}
+          {testResult.fix && !fixResult?.ok && (
+            <div className="border-t border-zinc-700/50 px-3 py-3 bg-amber-950/20">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Wrench className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-xs font-medium text-amber-300">{testResult.fix.title}</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mb-3 leading-relaxed">{testResult.fix.message}</p>
+
+              {/* Command to copy */}
+              {testResult.fix.command && (
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1.5">
+                    <Terminal className="w-3 h-3 text-zinc-600 shrink-0" />
+                    <code className="text-[11px] text-zinc-300 font-mono flex-1">{testResult.fix.command}</code>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(testResult.fix!.command!)}
+                    className="flex items-center gap-1 px-2 py-1.5 text-[10px] text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors"
+                  >
+                    {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
+
+              {/* Auto-fix button */}
+              {testResult.fix.autoFixable && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => runFix(testResult.fix!.type)}
+                    disabled={fixing}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-amber-600 hover:bg-amber-500 text-white rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {fixing
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Applying fix…</>
+                      : <><Wrench className="w-3.5 h-3.5" />Fix automatically</>
+                    }
+                  </button>
+                  {testResult.fix.type === "ollama-daemon-env" && (
+                    <p className="text-[10px] text-zinc-600">
+                      This will edit the OpenClaw service configuration and restart it (~5s downtime).
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fix result */}
+          {fixResult && (
+            <div className={cn(
+              "border-t border-zinc-700/50 px-3 py-2.5 flex items-start gap-2",
+              fixResult.ok ? "bg-emerald-950/30" : "bg-red-950/20"
+            )}>
+              {fixResult.ok
+                ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              }
+              <div>
+                <p className="text-xs text-zinc-300">{fixResult.message}</p>
+                {fixResult.ok && (
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Re-testing in a moment…</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Close */}
+          <div className="flex justify-end px-3 py-1.5 border-t border-zinc-800/60">
+            <button
+              onClick={() => { setTestState("idle"); setTestResult(null); setFixResult(null); }}
+              className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
