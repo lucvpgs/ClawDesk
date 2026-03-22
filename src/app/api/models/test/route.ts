@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
+import { homedir, platform } from "os";
 import path from "path";
 
 const CONFIG_PATH = path.join(homedir(), ".openclaw", "openclaw.json");
@@ -56,6 +56,32 @@ function readConfig(): Obj {
   } catch { return {}; }
 }
 
+// ── Daemon env check ─────────────────────────────────────────────────────────
+// ClawDesk and the OpenClaw gateway are separate processes.
+// We check the service config file directly — not process.env.
+
+function ollamaApiKeyInDaemon(): boolean {
+  const os = platform();
+  if (os === "darwin") {
+    const plistPath = path.join(homedir(), "Library", "LaunchAgents", "ai.openclaw.gateway.plist");
+    if (!existsSync(plistPath)) return false;
+    const content = readFileSync(plistPath, "utf-8");
+    return content.includes("<key>OLLAMA_API_KEY</key>");
+  }
+  if (os === "linux") {
+    const systemdPaths = [
+      path.join(homedir(), ".config", "systemd", "user", "openclaw-gateway.service"),
+      "/etc/systemd/user/openclaw-gateway.service",
+    ];
+    for (const p of systemdPaths) {
+      if (existsSync(p) && readFileSync(p, "utf-8").includes("OLLAMA_API_KEY")) return true;
+    }
+    return false;
+  }
+  // Windows / unknown: can't check — assume ok to avoid false positives
+  return true;
+}
+
 // ── Ollama ────────────────────────────────────────────────────────────────────
 
 async function testOllama(modelId: string, baseUrl: string): Promise<TestResult> {
@@ -100,9 +126,10 @@ async function testOllama(modelId: string, baseUrl: string): Promise<TestResult>
     });
   }
 
-  // 3. OLLAMA_API_KEY set in daemon environment
-  // If this env var is absent, OpenClaw won't register Ollama as a provider at all
-  const apiKeySet = !!process.env.OLLAMA_API_KEY;
+  // 3. OLLAMA_API_KEY set in the OpenClaw daemon environment
+  // ClawDesk and the OpenClaw gateway are separate processes — we must check
+  // the gateway's service config (plist / systemd), NOT process.env of this server.
+  const apiKeySet = ollamaApiKeyInDaemon();
   checks.push({
     id: "api-key-daemon",
     label: "OLLAMA_API_KEY set in service",
