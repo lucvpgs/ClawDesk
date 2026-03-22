@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Plus, X, ChevronRight, Bot, Crown, ExternalLink,
-  Github, Loader2, Download,
+  Github, Loader2, Download, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentInitial } from "@/lib/agent-colors";
@@ -78,8 +78,6 @@ function GitHubInstallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-lg mx-4">
-
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-800">
           <Github className="w-4 h-4 text-zinc-400 shrink-0" />
           <div className="flex-1 min-w-0">
@@ -94,8 +92,6 @@ function GitHubInstallModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Body */}
         <div className="px-5 py-4 space-y-4">
           <div className="space-y-1.5">
             <label className="text-[11px] text-zinc-500 uppercase tracking-wider">GitHub URL</label>
@@ -108,11 +104,9 @@ function GitHubInstallModal({
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-violet-600 placeholder:text-zinc-600 font-mono"
             />
             <p className="text-[10px] text-zinc-600">
-              Supports: repo root · /blob/branch/path/SKILL.md · /tree/branch/subdir · raw.githubusercontent.com URLs
+              Supports: repo root · /blob/branch/path/SKILL.md · /tree/branch/subdir · raw.githubusercontent.com
             </p>
           </div>
-
-          {/* Result */}
           {status === "success" && result && (
             <div className="flex items-start gap-2.5 p-3 bg-emerald-900/20 border border-emerald-800/40 rounded-lg">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -122,12 +116,11 @@ function GitHubInstallModal({
                   <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-2">{result.description}</p>
                 )}
                 <p className="text-[10px] text-zinc-600 mt-1">
-                  {result.alreadyExisted ? "Updated existing skill file." : "Skill installed to workspace."}{agentId ? " Added to agent." : ""}
+                  {result.alreadyExisted ? "Updated existing skill file." : "Skill installed to workspace."}{agentId ? " Assigned to agent." : ""}
                 </p>
               </div>
             </div>
           )}
-
           {status === "error" && (
             <div className="flex items-start gap-2.5 p-3 bg-red-900/20 border border-red-800/40 rounded-lg">
               <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
@@ -135,13 +128,8 @@ function GitHubInstallModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-800">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-          >
+          <button onClick={onClose} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
             {status === "success" ? "Close" : "Cancel"}
           </button>
           {status !== "success" && (
@@ -150,15 +138,25 @@ function GitHubInstallModal({
               disabled={!url.trim() || status === "loading"}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg transition-colors"
             >
-              {status === "loading" ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5" />
-              )}
+              {status === "loading" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               {status === "loading" ? "Installing…" : "Install"}
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete confirmation popover (inline) ─────────────────────────────────────
+function DeleteConfirm({ skillName, onConfirm, onCancel }: { skillName: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="absolute right-0 top-7 z-20 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-3 w-56">
+      <p className="text-xs text-zinc-300 mb-1">Delete <span className="font-mono text-red-300">{skillName}</span> from workspace?</p>
+      <p className="text-[10px] text-zinc-600 mb-3">Removes the file from disk and unassigns from all agents.</p>
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded transition-colors">Cancel</button>
+        <button onClick={onConfirm} className="flex-1 px-2 py-1 text-xs text-red-400 hover:text-red-300 border border-red-800/60 rounded transition-colors">Delete</button>
       </div>
     </div>
   );
@@ -172,6 +170,8 @@ export default function SkillsPage() {
   const [filter, setFilter] = useState<"all" | "eligible" | "installed">("all");
   const [search, setSearch] = useState("");
   const [showGitHubModal, setShowGitHubModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: skillsData, isLoading: skillsLoading, refetch: refetchSkills } = useQuery<{
     skills: SkillEntry[];
@@ -192,7 +192,12 @@ export default function SkillsPage() {
   const agents    = configData?.agents ?? [];
 
   const selectedAgent = selectedAgentId ? agents.find((a) => a.id === selectedAgentId) ?? null : null;
-  const installedSkills = new Set(selectedAgent?.skills ?? []);
+  const assignedSkillNames = new Set(selectedAgent?.skills ?? []);
+
+  // All workspace skill names (on disk)
+  const workspaceSkillNames = new Set(
+    allSkills.filter((s) => s.source === "openclaw-workspace").map((s) => s.name)
+  );
 
   // Auto-select principal agent on first load
   if (!selectedAgentId && agents.length > 0) {
@@ -200,11 +205,12 @@ export default function SkillsPage() {
     setSelectedAgentId(principal.id);
   }
 
-  async function toggleSkill(skillName: string) {
+  // Assign / unassign skill for current agent
+  async function toggleAssign(skillName: string) {
     if (!selectedAgent) return;
     setSaving(true);
     const current = selectedAgent.skills ?? [];
-    const next = installedSkills.has(skillName)
+    const next = assignedSkillNames.has(skillName)
       ? current.filter((s) => s !== skillName)
       : [...current, skillName];
     try {
@@ -220,32 +226,48 @@ export default function SkillsPage() {
     }
   }
 
-  function handleGitHubInstalled(skillName: string) {
-    // Refresh catalog + config so the new skill appears
+  // Delete workspace skill from disk
+  async function deleteSkill(skillName: string) {
+    setDeleting(true);
+    try {
+      await fetch(`/api/skills/${encodeURIComponent(skillName)}`, { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["skills-catalog"] });
+      qc.invalidateQueries({ queryKey: ["agents-config"] });
+      refetchSkills();
+      refetchConfig();
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  }
+
+  function handleGitHubInstalled() {
     refetchSkills();
     refetchConfig();
     qc.invalidateQueries({ queryKey: ["skills-catalog"] });
     qc.invalidateQueries({ queryKey: ["agents-config"] });
-    // Auto-add to agent if one is selected (API route already did it, but invalidate to sync UI)
-    void skillName;
   }
 
+  // Workspace skills not yet assigned to this agent
+  const workspaceUnassigned = allSkills.filter(
+    (s) => s.source === "openclaw-workspace" && !assignedSkillNames.has(s.name)
+  );
+
   const filteredSkills = allSkills.filter((s) => {
-    if (filter === "eligible"  && !s.eligible)            return false;
-    if (filter === "installed" && !installedSkills.has(s.name)) return false;
+    if (filter === "eligible"  && !s.eligible)                 return false;
+    if (filter === "installed" && !assignedSkillNames.has(s.name)) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())
                && !s.description.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const eligibleCount   = allSkills.filter((s) => s.eligible).length;
-  const installedCount  = installedSkills.size;
-  const isLoading       = skillsLoading || configLoading;
+  const eligibleCount  = allSkills.filter((s) => s.eligible).length;
+  const assignedCount  = assignedSkillNames.size;
+  const isLoading      = skillsLoading || configLoading;
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
 
-      {/* GitHub Install Modal */}
       {showGitHubModal && (
         <GitHubInstallModal
           agentId={selectedAgentId}
@@ -260,7 +282,7 @@ export default function SkillsPage() {
         <div>
           <h1 className="text-base font-semibold text-zinc-100">Skills</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            {allSkills.length} skills in catalog · {eligibleCount} eligible on this device
+            {allSkills.length} in catalog · {eligibleCount} eligible · {workspaceSkillNames.size} in workspace
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -289,9 +311,9 @@ export default function SkillsPage() {
           <div className="w-52 shrink-0 space-y-1.5">
             <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-1 mb-2">Agent</p>
             {agents.map((agent) => {
-              const accent  = agentAccent(agent.id);
-              const emoji   = agent.identity?.emoji ?? null;
-              const count   = agent.skills?.length ?? 0;
+              const accent   = agentAccent(agent.id);
+              const emoji    = agent.identity?.emoji ?? null;
+              const count    = agent.skills?.length ?? 0;
               const selected = selectedAgentId === agent.id;
               return (
                 <button
@@ -314,7 +336,7 @@ export default function SkillsPage() {
                       <span className="text-xs text-zinc-200 truncate">{agent.name ?? agent.id}</span>
                     </div>
                     <span className="text-[10px] text-zinc-600">
-                      {count} skill{count !== 1 ? "s" : ""}
+                      {count} assigned
                     </span>
                   </div>
                   {selected && <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />}
@@ -323,7 +345,7 @@ export default function SkillsPage() {
             })}
           </div>
 
-          {/* ── Right: Skill catalog for selected agent ──────────────────── */}
+          {/* ── Right ────────────────────────────────────────────────────── */}
           <div className="flex-1 min-w-0 space-y-3">
 
             {/* Agent header */}
@@ -336,23 +358,25 @@ export default function SkillsPage() {
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
                   <Package className="w-3 h-3" />
-                  <span>{installedCount} installed</span>
+                  <span>{assignedCount} assigned</span>
                 </div>
-                {/* Per-agent GitHub install shortcut */}
                 <button
                   onClick={() => setShowGitHubModal(true)}
-                  className="flex items-center gap-1 text-[10px] text-zinc-600 hover:text-violet-400 transition-colors ml-2"
-                  title="Install skill from GitHub for this agent"
+                  className="text-zinc-600 hover:text-violet-400 transition-colors ml-1"
+                  title="Install skill from GitHub"
                 >
-                  <Github className="w-3 h-3" />
+                  <Github className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
 
-            {/* Installed skills chips */}
-            {installedCount > 0 && (
+            {/* ── Assigned to this agent ─────────────────────────────────── */}
+            {assignedCount > 0 && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-zinc-600">Installed</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-600">Assigned to this agent</p>
+                  <span className="text-[9px] text-zinc-700">— active in agent context</span>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {[...(selectedAgent?.skills ?? [])].sort().map((skillName) => {
                     const skill = allSkills.find((s) => s.name === skillName);
@@ -360,7 +384,7 @@ export default function SkillsPage() {
                       <div
                         key={skillName}
                         className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs",
+                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs group",
                           skill?.eligible
                             ? "bg-emerald-900/20 border-emerald-800/40 text-emerald-300"
                             : "bg-zinc-800/50 border-zinc-700/50 text-zinc-400"
@@ -369,10 +393,10 @@ export default function SkillsPage() {
                         {skill?.emoji && <span>{skill.emoji}</span>}
                         <span className="font-mono">{skillName}</span>
                         <button
-                          onClick={() => toggleSkill(skillName)}
+                          onClick={() => toggleAssign(skillName)}
                           disabled={saving}
                           className="ml-0.5 text-current opacity-60 hover:opacity-100 disabled:opacity-30 transition-opacity"
-                          title="Remove"
+                          title="Remove from agent (keeps skill on disk)"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -380,6 +404,36 @@ export default function SkillsPage() {
                     );
                   })}
                 </div>
+                <p className="text-[10px] text-zinc-700">× removes from agent only — skill stays on disk</p>
+              </div>
+            )}
+
+            {/* ── In workspace but not assigned ─────────────────────────── */}
+            {workspaceUnassigned.length > 0 && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-600">In workspace — not assigned to this agent</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {workspaceUnassigned.map((skill) => (
+                    <div
+                      key={skill.name}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs bg-violet-900/10 border-violet-800/30 text-violet-400"
+                    >
+                      {skill.emoji && <span>{skill.emoji}</span>}
+                      <span className="font-mono">{skill.name}</span>
+                      <button
+                        onClick={() => toggleAssign(skill.name)}
+                        disabled={saving}
+                        className="ml-0.5 opacity-60 hover:opacity-100 hover:text-emerald-400 disabled:opacity-30 transition-colors"
+                        title="Assign to this agent"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-700">+ assigns to this agent · to delete from disk, use the trash icon in the catalog below</p>
               </div>
             )}
 
@@ -402,7 +456,7 @@ export default function SkillsPage() {
                       : "border-zinc-800 text-zinc-600 hover:text-zinc-300"
                   )}
                 >
-                  {f}
+                  {f === "installed" ? "assigned" : f}
                 </button>
               ))}
             </div>
@@ -415,7 +469,8 @@ export default function SkillsPage() {
                 </div>
               ) : (
                 filteredSkills.map((skill) => {
-                  const installed = installedSkills.has(skill.name);
+                  const assigned  = assignedSkillNames.has(skill.name);
+                  const inWorkspace = skill.source === "openclaw-workspace";
                   const missingReqs: string[] = [
                     ...(skill.missing?.bins ?? []),
                     ...(skill.missing?.anyBins ?? []),
@@ -428,16 +483,16 @@ export default function SkillsPage() {
                       key={skill.name}
                       className={cn(
                         "flex gap-3 p-3 rounded-lg border transition-colors",
-                        installed
+                        assigned
                           ? "bg-emerald-900/10 border-emerald-800/30"
                           : skill.eligible
                           ? "bg-zinc-900 border-zinc-800"
                           : "bg-zinc-900/50 border-zinc-800/50 opacity-70"
                       )}
                     >
-                      {/* Icon / status */}
+                      {/* Icon */}
                       <div className="shrink-0 mt-0.5">
-                        {installed ? (
+                        {assigned ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                         ) : skill.eligible ? (
                           <Package className="w-4 h-4 text-zinc-500" />
@@ -450,35 +505,31 @@ export default function SkillsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {skill.emoji && <span className="text-sm">{skill.emoji}</span>}
-                          <span className={cn("text-xs font-mono font-medium", installed ? "text-emerald-300" : skill.eligible ? "text-zinc-200" : "text-zinc-600")}>
+                          <span className={cn("text-xs font-mono font-medium", assigned ? "text-emerald-300" : skill.eligible ? "text-zinc-200" : "text-zinc-600")}>
                             {skill.name}
                           </span>
                           <span className={cn(
                             "text-[9px] px-1.5 py-0.5 rounded border ml-auto shrink-0",
-                            skill.source === "openclaw-workspace"
+                            inWorkspace
                               ? "text-violet-400 border-violet-800/40 bg-violet-900/20"
                               : "text-zinc-700 border-zinc-800"
                           )}>
-                            {skill.source === "openclaw-workspace" ? "local" : "bundled"}
+                            {inWorkspace ? "workspace" : "bundled"}
                           </span>
                         </div>
                         <p className="text-[11px] text-zinc-500 leading-snug line-clamp-2">
                           {skill.description}
                         </p>
-
-                        {/* Missing requirements */}
                         {!skill.eligible && missingReqs.length > 0 && (
                           <div className="flex items-center gap-1 mt-1.5">
                             <AlertCircle className="w-3 h-3 text-zinc-700 shrink-0" />
-                            <span className="text-[10px] text-zinc-700">
-                              Missing: {missingReqs.join(", ")}
-                            </span>
+                            <span className="text-[10px] text-zinc-700">Missing: {missingReqs.join(", ")}</span>
                           </div>
                         )}
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-start gap-1.5 shrink-0">
+                      <div className="flex items-start gap-1 shrink-0 relative">
                         {skill.homepage && (
                           <a
                             href={skill.homepage}
@@ -490,21 +541,50 @@ export default function SkillsPage() {
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
+
+                        {/* Assign / unassign */}
                         <button
-                          onClick={() => toggleSkill(skill.name)}
+                          onClick={() => toggleAssign(skill.name)}
                           disabled={saving || !selectedAgent}
                           className={cn(
                             "p-1 rounded transition-colors disabled:opacity-40",
-                            installed
-                              ? "text-emerald-500 hover:text-red-400"
+                            assigned
+                              ? "text-emerald-500 hover:text-amber-400"
                               : skill.eligible
                               ? "text-zinc-600 hover:text-emerald-400"
                               : "text-zinc-800 cursor-not-allowed"
                           )}
-                          title={installed ? "Remove from agent" : skill.eligible ? "Add to agent" : "Not available on this device"}
+                          title={
+                            assigned
+                              ? "Remove from agent (file stays on disk)"
+                              : skill.eligible
+                              ? "Assign to agent"
+                              : "Not available on this device"
+                          }
                         >
-                          {installed ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                          {assigned ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                         </button>
+
+                        {/* Delete from disk — workspace skills only */}
+                        {inWorkspace && (
+                          <div className="relative">
+                            <button
+                              onClick={() => setConfirmDelete(confirmDelete === skill.name ? null : skill.name)}
+                              disabled={deleting}
+                              className="p-1 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                              title="Delete from workspace (removes file from disk)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            {confirmDelete === skill.name && (
+                              <DeleteConfirm
+                                skillName={skill.name}
+                                onConfirm={() => deleteSkill(skill.name)}
+                                onCancel={() => setConfirmDelete(null)}
+                              />
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
