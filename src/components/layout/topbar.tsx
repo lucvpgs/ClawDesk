@@ -4,16 +4,18 @@ import { useRuntimeStore } from "@/lib/store";
 import { statusDot } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useAutoSync } from "@/hooks/use-auto-sync";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search, Sun, Moon } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CommandPalette, useCommandPalette } from "@/components/CommandPalette";
+import { useTheme } from "@/components/ThemeProvider";
 
 export function Topbar() {
   const { activeRuntime } = useRuntimeStore();
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
   const { open, setOpen } = useCommandPalette();
+  const { theme, toggle } = useTheme();
 
   useAutoSync();
 
@@ -63,6 +65,18 @@ export function Topbar() {
           <Search className="w-3 h-3" />
           <span className="hidden sm:block">Search</span>
           <kbd className="hidden sm:block text-[10px] font-mono bg-zinc-900 border border-zinc-700 rounded px-1">⌘K</kbd>
+        </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark"
+            ? <Sun  className="w-3.5 h-3.5" />
+            : <Moon className="w-3.5 h-3.5" />
+          }
         </button>
 
         <button

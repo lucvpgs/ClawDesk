@@ -15,7 +15,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
+      {/* Inline script: apply theme class before first paint — prevents FOUC */}
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('clawdesk:theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="bg-zinc-950 text-zinc-100 antialiased">
         <Providers>{children}</Providers>
         <Toaster />

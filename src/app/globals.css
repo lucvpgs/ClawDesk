@@ -3,11 +3,6 @@
 /*
  * Readability overrides for dark UI.
  * Shifts zinc mid-tones lighter so small text stays legible on zinc-950/900 backgrounds.
- * Each step bumped ~one full step toward white:
- *   500: #71717a → #909098   (secondary text, meta)
- *   600: #52525b → #71717a   (labels, uppercase headers) ← most impactful (180 uses)
- *   700: #3f3f46 → #52525b   (subtle / muted text, empty states)
- * Backgrounds (800/900/950) and primary text (100/200/300/400) are untouched.
  */
 @theme {
   --color-zinc-500: #909098;
@@ -31,8 +26,45 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar */
+/* Scrollbar — dark */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #52525b; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #71717a; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LIGHT THEME — warm off-white / cream
+   Overrides Tailwind's zinc CSS custom properties so all utility classes
+   (bg-zinc-*, text-zinc-*, border-zinc-*, etc.) automatically adapt.
+   Palette is a warm-tinted inversion: 950→cream, 100→near-black.
+───────────────────────────────────────────────────────────────────────────── */
+html.light {
+  --background:    #f5f1eb;
+  --foreground:    #1c1714;
+
+  /* Zinc scale — warm cream palette (dark→light, light→dark) */
+  --color-zinc-950: #f5f1eb;   /* body bg         — warm cream            */
+  --color-zinc-900: #ece7de;   /* card bg          — slightly darker       */
+  --color-zinc-800: #ddd7cd;   /* card inner/code  — borders, inputs       */
+  --color-zinc-700: #c8c0b6;   /* subtle borders                           */
+  --color-zinc-600: #9e948a;   /* secondary labels (uppercase headers)     */
+  --color-zinc-500: #7d7068;   /* muted text                               */
+  --color-zinc-400: #5c524d;   /* medium text                              */
+  --color-zinc-300: #3d3530;   /* stronger text                            */
+  --color-zinc-200: #2c2420;   /* dark text                                */
+  --color-zinc-100: #1c1714;   /* primary text     — near-black warm       */
+}
+
+html.light body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Scrollbar — light */
+html.light ::-webkit-scrollbar-thumb { background: #c8c0b6; border-radius: 2px; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #9e948a; }
+
+/* Code / mono backgrounds look better slightly more opaque in light mode */
+html.light .font-mono {
+  letter-spacing: -0.01em;
+}
