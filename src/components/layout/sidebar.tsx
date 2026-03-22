@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   LogOut,
   Package,
+  MessageSquare,
 } from "lucide-react";
 
 interface VersionInfo {
@@ -37,6 +38,7 @@ const STORAGE_KEY = "clawdesk:lastSeenOpenclawVersion";
 const navItems = [
   { label: "Overview",  href: "/overview",  icon: LayoutDashboard },
   { label: "Agents",    href: "/agents",    icon: Bot             },
+  { label: "Sessions",  href: "/sessions",  icon: MessageSquare   },
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare     },
   { label: "Projects",  href: "/projects",  icon: FolderKanban    },
   { label: "Schedules", href: "/schedules", icon: CalendarClock   },
