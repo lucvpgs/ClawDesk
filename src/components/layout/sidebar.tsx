@@ -19,6 +19,7 @@ import {
   Cpu,
   Activity,
   Settings,
+  Shield,
   Zap,
   AlertTriangle,
   LogOut,
@@ -50,6 +51,7 @@ const navItems = [
   { label: "Docs",      href: "/docs",      icon: FileText        },
   { label: "Activity",  href: "/activity",  icon: Activity        },
   { label: "Settings",  href: "/settings",  icon: Settings        },
+  { label: "Security",  href: "/security",  icon: Shield          },
 ];
 
 export function Sidebar() {

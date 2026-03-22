@@ -35,6 +35,7 @@ interface AgentConfig {
   identity?: { name?: string; theme?: string; emoji?: string };
   tools?: Record<string, unknown>;
   subagents?: { allowAgents?: string[] };
+  budgetPerDay?: number;
 }
 
 interface ConfigData {
@@ -304,7 +305,7 @@ function AgentCard({
 // ── Agent Detail Panel ────────────────────────────────────────────────────────
 const WORKSPACE_FILES = ["SOUL.md", "IDENTITY.md", "MEMORY.md", "HEARTBEAT.md", "BOOTSTRAP.md", "TOOLS.md", "USER.md"];
 
-type DetailTab = "identity" | "model" | "files" | "skills";
+type DetailTab = "identity" | "model" | "budget" | "files" | "skills";
 
 function AgentDetailPanel({
   agent, config, availableModels, onClose, onSaved,
@@ -326,6 +327,9 @@ function AgentDetailPanel({
 
   // Model fields
   const [model, setModel] = useState(config.model ?? "");
+  const [budgetPerDay, setBudgetPerDay] = useState<string>(
+    config.budgetPerDay ? String(config.budgetPerDay) : ""
+  );
 
   // Skills
   const [skills, setSkills] = useState<string[]>(config.skills ?? []);
@@ -371,6 +375,7 @@ function AgentDetailPanel({
           model: model || undefined,
           skills,
           identity: { name: name || undefined, emoji: emoji || undefined, theme: theme || undefined },
+          budgetPerDay: budgetPerDay ? parseFloat(budgetPerDay) : null,
         }),
       });
       const data = await res.json();
@@ -408,6 +413,7 @@ function AgentDetailPanel({
   const TABS: { key: DetailTab; label: string }[] = [
     { key: "identity", label: "Identity" },
     { key: "model",    label: "Model"    },
+    { key: "budget",   label: "Budget"   },
     { key: "files",    label: "Files"    },
     { key: "skills",   label: "Skills"   },
   ];
@@ -579,6 +585,39 @@ function AgentDetailPanel({
               </div>
             </div>
           )}
+
+          {/* ── Budget tab ── */}
+                {tab === "budget" && (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-400">Daily budget (USD)</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500 text-sm">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-violet-600 placeholder:text-zinc-600"
+                          placeholder="e.g. 5.00"
+                          value={budgetPerDay}
+                          onChange={(e) => setBudgetPerDay(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-600">
+                        ClawDesk îți trimite o notificare la 80% și 100% din bugetul zilnic.
+                        Setează 0 sau lasă gol pentru fără limită.
+                      </p>
+                    </div>
+                    {budgetPerDay && parseFloat(budgetPerDay) > 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-violet-900/10 border border-violet-800/30 rounded-lg">
+                        <span className="text-[11px] text-violet-300">
+                          Alertă la <strong>${(parseFloat(budgetPerDay) * 0.8).toFixed(2)}</strong> (80%)
+                          și <strong>${parseFloat(budgetPerDay).toFixed(2)}</strong> (100%)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
           {/* ── Files tab ── */}
           {tab === "files" && (
