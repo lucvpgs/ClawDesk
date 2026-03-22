@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Plus, X, ChevronRight, Bot, Crown, ExternalLink,
+  Github, Loader2, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentInitial } from "@/lib/agent-colors";
@@ -31,6 +32,138 @@ interface AgentConfig {
   model?: string;
 }
 
+// ── GitHub Install Modal ───────────────────────────────────────────────────────
+function GitHubInstallModal({
+  agentId,
+  agentName,
+  onClose,
+  onInstalled,
+}: {
+  agentId: string | null;
+  agentName: string;
+  onClose: () => void;
+  onInstalled: (skillName: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [result, setResult] = useState<{ skillName: string; description: string; alreadyExisted: boolean } | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleInstall() {
+    if (!url.trim()) return;
+    setStatus("loading");
+    setError("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/skills/install-github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim(), agentId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setStatus("success");
+        setResult({ skillName: data.skillName, description: data.description, alreadyExisted: data.alreadyExisted });
+        onInstalled(data.skillName);
+      } else {
+        setStatus("error");
+        setError(data.error ?? "Unknown error");
+      }
+    } catch (e) {
+      setStatus("error");
+      setError(String(e));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-lg mx-4">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-800">
+          <Github className="w-4 h-4 text-zinc-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-semibold text-zinc-100">Install skill from GitHub</h2>
+            {agentId && (
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                Will be added to <span className="text-zinc-300">{agentName}</span>
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider">GitHub URL</label>
+            <input
+              autoFocus
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); setStatus("idle"); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleInstall()}
+              placeholder="https://github.com/user/my-skill"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-violet-600 placeholder:text-zinc-600 font-mono"
+            />
+            <p className="text-[10px] text-zinc-600">
+              Supports: repo root · /blob/branch/path/SKILL.md · /tree/branch/subdir · raw.githubusercontent.com URLs
+            </p>
+          </div>
+
+          {/* Result */}
+          {status === "success" && result && (
+            <div className="flex items-start gap-2.5 p-3 bg-emerald-900/20 border border-emerald-800/40 rounded-lg">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-emerald-300 font-mono">{result.skillName}</p>
+                {result.description && (
+                  <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-2">{result.description}</p>
+                )}
+                <p className="text-[10px] text-zinc-600 mt-1">
+                  {result.alreadyExisted ? "Updated existing skill file." : "Skill installed to workspace."}{agentId ? " Added to agent." : ""}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {status === "error" && (
+            <div className="flex items-start gap-2.5 p-3 bg-red-900/20 border border-red-800/40 rounded-lg">
+              <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-300">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-800">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {status === "success" ? "Close" : "Cancel"}
+          </button>
+          {status !== "success" && (
+            <button
+              onClick={handleInstall}
+              disabled={!url.trim() || status === "loading"}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg transition-colors"
+            >
+              {status === "loading" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              {status === "loading" ? "Installing…" : "Install"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function SkillsPage() {
   const qc = useQueryClient();
@@ -38,6 +171,7 @@ export default function SkillsPage() {
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<"all" | "eligible" | "installed">("all");
   const [search, setSearch] = useState("");
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
 
   const { data: skillsData, isLoading: skillsLoading, refetch: refetchSkills } = useQuery<{
     skills: SkillEntry[];
@@ -86,6 +220,16 @@ export default function SkillsPage() {
     }
   }
 
+  function handleGitHubInstalled(skillName: string) {
+    // Refresh catalog + config so the new skill appears
+    refetchSkills();
+    refetchConfig();
+    qc.invalidateQueries({ queryKey: ["skills-catalog"] });
+    qc.invalidateQueries({ queryKey: ["agents-config"] });
+    // Auto-add to agent if one is selected (API route already did it, but invalidate to sync UI)
+    void skillName;
+  }
+
   const filteredSkills = allSkills.filter((s) => {
     if (filter === "eligible"  && !s.eligible)            return false;
     if (filter === "installed" && !installedSkills.has(s.name)) return false;
@@ -101,6 +245,16 @@ export default function SkillsPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
 
+      {/* GitHub Install Modal */}
+      {showGitHubModal && (
+        <GitHubInstallModal
+          agentId={selectedAgentId}
+          agentName={selectedAgent?.name ?? selectedAgent?.id ?? "selected agent"}
+          onClose={() => setShowGitHubModal(false)}
+          onInstalled={handleGitHubInstalled}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -109,12 +263,21 @@ export default function SkillsPage() {
             {allSkills.length} skills in catalog · {eligibleCount} eligible on this device
           </p>
         </div>
-        <button
-          onClick={() => { refetchSkills(); refetchConfig(); }}
-          className="p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowGitHubModal(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-600 rounded-lg transition-colors"
+          >
+            <Github className="w-3.5 h-3.5" />
+            Install from GitHub
+          </button>
+          <button
+            onClick={() => { refetchSkills(); refetchConfig(); }}
+            className="p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -175,6 +338,14 @@ export default function SkillsPage() {
                   <Package className="w-3 h-3" />
                   <span>{installedCount} installed</span>
                 </div>
+                {/* Per-agent GitHub install shortcut */}
+                <button
+                  onClick={() => setShowGitHubModal(true)}
+                  className="flex items-center gap-1 text-[10px] text-zinc-600 hover:text-violet-400 transition-colors ml-2"
+                  title="Install skill from GitHub for this agent"
+                >
+                  <Github className="w-3 h-3" />
+                </button>
               </div>
             )}
 
