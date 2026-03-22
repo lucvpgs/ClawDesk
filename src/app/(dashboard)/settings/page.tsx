@@ -8,7 +8,7 @@ import {
   Radio, CheckCircle2, AlertCircle, Circle,
   Shield, Terminal, Clock, Bot,
   MessageSquare, Search, Hash, Send, GitBranch, FileText, Layers, Webhook,
-  ExternalLink, Eye, EyeOff, X, Save, Trash2, ChevronDown, ChevronUp, Loader2,
+  ExternalLink, Eye, EyeOff, X, Save, Trash2, ChevronDown, ChevronUp, Loader2, FlaskConical,
 } from "lucide-react";
 import { cn, timeAgo, statusDot, statusColor } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
@@ -345,8 +345,12 @@ function ChannelCard({ channel, onRemoved }: { channel: Channel; onRemoved: () =
   const isRunning = channel.running === true;
   const isCfg     = channel.configured === true;
   const probeOk   = channel.probe?.ok === true;
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving]         = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [testing, setTesting]           = useState(false);
+  const [testResult, setTestResult]     = useState<{
+    ok: boolean; message: string; elapsedMs?: number;
+  } | null>(null);
 
   async function handleRemove() {
     if (!confirmRemove) { setConfirmRemove(true); return; }
@@ -361,6 +365,38 @@ function ChannelCard({ channel, onRemoved }: { channel: Channel; onRemoved: () =
     } finally {
       setRemoving(false);
       setConfirmRemove(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res  = await fetch("/api/channels/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelType: channel.channelType }),
+      });
+      const data = await res.json() as {
+        probe?: { ok: boolean; elapsedMs?: number };
+        running?: boolean;
+        error?: string;
+      };
+      if (data.error) {
+        setTestResult({ ok: false, message: data.error });
+      } else if (data.probe) {
+        setTestResult({
+          ok: data.probe.ok,
+          message: data.probe.ok ? "Connection OK" : "Probe failed",
+          elapsedMs: data.probe.elapsedMs,
+        });
+      } else {
+        setTestResult({ ok: data.running ?? false, message: data.running ? "Running" : "Not running" });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, message: String(e) });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -391,6 +427,16 @@ function ChannelCard({ channel, onRemoved }: { channel: Channel; onRemoved: () =
             <span className="text-[10px] bg-zinc-900 text-zinc-700 border border-zinc-800 px-1.5 py-0.5 rounded">inactive</span>
           )}
           <button
+            onClick={handleTest}
+            disabled={testing}
+            title="Test connection"
+            className="p-1 rounded text-zinc-600 hover:text-violet-400 transition-colors"
+          >
+            {testing
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <FlaskConical className="w-3.5 h-3.5" />}
+          </button>
+          <button
             onClick={handleRemove}
             disabled={removing}
             title={confirmRemove ? "Click again to confirm" : "Remove channel"}
@@ -407,12 +453,28 @@ function ChannelCard({ channel, onRemoved }: { channel: Channel; onRemoved: () =
       </div>
 
       <div className="px-4 py-3 space-y-2">
-        <ChannelRow label="Configured" value={isCfg      ? "Yes" : "No"} ok={isCfg}      />
-        <ChannelRow label="Running"    value={isRunning   ? "Yes" : "No"} ok={isRunning}   />
+        <ChannelRow label="Configured" value={isCfg    ? "Yes" : "No"} ok={isCfg}    />
+        <ChannelRow label="Running"    value={isRunning ? "Yes" : "No"} ok={isRunning} />
         {channel.probe && (
           <ChannelRow label="Probe" value={probeOk ? `OK (${channel.probe.elapsedMs ?? "?"}ms)` : "Failed"} ok={probeOk} />
         )}
-        {channel.lastError && (
+        {testResult && (
+          <div className={cn(
+            "mt-2 rounded px-2.5 py-1.5 border",
+            testResult.ok
+              ? "bg-emerald-900/20 border-emerald-800/30"
+              : "bg-red-900/20 border-red-800/30"
+          )}>
+            <div className={cn("text-[10px] uppercase tracking-wider mb-0.5", testResult.ok ? "text-emerald-500" : "text-red-500")}>
+              Test result
+            </div>
+            <div className={cn("text-xs", testResult.ok ? "text-emerald-400" : "text-red-400")}>
+              {testResult.message}
+              {testResult.elapsedMs != null && ` (${testResult.elapsedMs}ms)`}
+            </div>
+          </div>
+        )}
+        {channel.lastError && !testResult && (
           <div className="mt-2 bg-red-900/20 border border-red-800/30 rounded px-2.5 py-1.5">
             <div className="text-[10px] text-red-500 uppercase tracking-wider mb-0.5">Last error</div>
             <div className="text-xs text-red-400 break-all">{channel.lastError}</div>
@@ -655,8 +717,42 @@ function ApprovalsTab() {
     queryFn: () => fetch("/api/approvals").then((r) => r.json()),
   });
 
+  const [addingFor, setAddingFor]   = useState<string | null>(null);
+  const [newPattern, setNewPattern] = useState("");
+  const [saving, setSaving]         = useState(false);
+  const [saveError, setSaveError]   = useState<string | null>(null);
+
   const agents       = data?.agents ?? [];
   const totalEntries = agents.reduce((sum, a) => sum + a.allowlist.length, 0);
+
+  async function handleAdd(agentId: string) {
+    if (!newPattern.trim()) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res  = await fetch("/api/approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId, pattern: newPattern.trim() }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) { setSaveError(json.error ?? "Failed"); return; }
+      setNewPattern("");
+      setAddingFor(null);
+      refetch();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(agentId: string, entryId: string) {
+    await fetch("/api/approvals", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, entryId }),
+    });
+    refetch();
+  }
 
   return (
     <div className="space-y-5">
@@ -695,20 +791,56 @@ function ApprovalsTab() {
                 <span className="text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700/50 px-1.5 py-0.5 rounded">
                   {agent.allowlist.length} patterns
                 </span>
+                <button
+                  onClick={() => { setAddingFor(agent.agentId); setNewPattern(""); setSaveError(null); }}
+                  className="ml-auto flex items-center gap-1 text-[10px] text-zinc-600 hover:text-violet-400 border border-zinc-800 hover:border-violet-800 px-2 py-0.5 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Add pattern
+                </button>
               </div>
+
+              {/* Add pattern row */}
+              {addingFor === agent.agentId && (
+                <div className="mb-2 flex items-center gap-2 bg-zinc-900 border border-violet-800/50 rounded-lg px-3 py-2">
+                  <Terminal className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                  <input
+                    autoFocus
+                    value={newPattern}
+                    onChange={(e) => setNewPattern(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAdd(agent.agentId);
+                      if (e.key === "Escape") setAddingFor(null);
+                    }}
+                    placeholder="e.g. /usr/bin/python3 or sqlite3"
+                    className="flex-1 bg-transparent text-xs font-mono text-zinc-200 outline-none placeholder:text-zinc-700"
+                  />
+                  {saveError && <span className="text-[10px] text-red-400">{saveError}</span>}
+                  <button
+                    onClick={() => handleAdd(agent.agentId)}
+                    disabled={!newPattern.trim() || saving}
+                    className="text-[10px] bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-2.5 py-1 rounded transition-colors"
+                  >
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add"}
+                  </button>
+                  <button onClick={() => setAddingFor(null)} className="text-zinc-600 hover:text-zinc-300">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
                 <div className="grid grid-cols-12 px-4 py-2 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-600">
                   <div className="col-span-4">Pattern</div>
-                  <div className="col-span-5">Last command</div>
+                  <div className="col-span-4">Last command</div>
                   <div className="col-span-3 text-right">Last used</div>
+                  <div className="col-span-1" />
                 </div>
                 <div className="divide-y divide-zinc-800/50">
                   {agent.allowlist.length === 0 ? (
                     <div className="px-4 py-4 text-xs text-zinc-700 text-center">No approved patterns</div>
                   ) : (
                     agent.allowlist.map((entry) => (
-                      <div key={entry.id} className="grid grid-cols-12 px-4 py-2.5 hover:bg-zinc-800/20 transition-colors">
+                      <div key={entry.id} className="grid grid-cols-12 px-4 py-2.5 hover:bg-zinc-800/20 transition-colors group">
                         <div className="col-span-4 flex items-center gap-2 min-w-0">
                           <Terminal className="w-3 h-3 text-zinc-600 shrink-0" />
                           <div className="min-w-0">
@@ -718,7 +850,7 @@ function ApprovalsTab() {
                             )}
                           </div>
                         </div>
-                        <div className="col-span-5 flex items-center min-w-0 px-2">
+                        <div className="col-span-4 flex items-center min-w-0 px-2">
                           {entry.lastUsedCommand ? (
                             <span className="text-[10px] font-mono text-zinc-500 truncate">
                               {entry.lastUsedCommand.split("\n")[0]}
@@ -736,6 +868,15 @@ function ApprovalsTab() {
                           ) : (
                             <span className="text-[10px] text-zinc-700">never</span>
                           )}
+                        </div>
+                        <div className="col-span-1 flex items-center justify-end">
+                          <button
+                            onClick={() => handleDelete(agent.agentId, entry.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-700 hover:text-red-400 transition-all"
+                            title="Remove pattern"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
                     ))

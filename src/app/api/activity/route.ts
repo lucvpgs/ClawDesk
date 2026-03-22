@@ -25,5 +25,6 @@ export async function GET() {
         .orderBy(desc(activityEvents.occurredAt))
         .limit(100);
 
+  // rawJson is included so the detail panel can show full event payload
   return NextResponse.json({ events });
 }
