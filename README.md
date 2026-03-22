@@ -1,8 +1,16 @@
 # ClawDesk — Mission Control
 
-A native macOS desktop app for [OpenClaw](https://openclaw.ai) — manage your agents, tasks, schedules, models, channels and memory from a clean UI.
+A native desktop app for [OpenClaw](https://openclaw.ai) — manage your agents, tasks, schedules, models, channels and memory from a clean UI.
 
 ![Tauri](https://img.shields.io/badge/Tauri-v2-blue) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![SQLite](https://img.shields.io/badge/SQLite-local-blue) ![OpenClaw](https://img.shields.io/badge/OpenClaw-required-violet)
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS (Apple Silicon) | ✅ Supported | Primary development target |
+| macOS (Intel) | ✅ Supported | |
+| Linux (x86_64) | ✅ Supported | `.deb` and `.AppImage` bundles |
+| Linux (ARM64) | 🧪 Experimental | Builds succeed; limited testing |
+| Windows | 🚧 Planned | Binary path detection in progress |
 
 ---
 
@@ -21,31 +29,25 @@ A native macOS desktop app for [OpenClaw](https://openclaw.ai) — manage your a
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel)
-- [OpenClaw](https://openclaw.ai) installed (`openclaw start` to run the gateway)
-- That's it — the app bundles its own Node.js server
+- **macOS** 12+ or **Linux** (Ubuntu 22.04+, Debian 12+, Fedora 38+)
+- [OpenClaw](https://openclaw.ai) installed and running (`openclaw start`)
+- The app bundles its own Node.js server — no separate Node install required at runtime
 
 ---
 
-## Install (macOS)
+## Install
 
-### Option A — Build from source
+### macOS — Build from source
 
 You need: **Node.js 18+**, **pnpm**, **Rust** (via [rustup](https://rustup.rs)).
 
 ```bash
-# 1. Clone
 git clone https://github.com/lucvpgs/ClawDesk.git
 cd ClawDesk
-
-# 2. Install dependencies
 pnpm install
-
-# 3. Build
 pnpm build
 PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build --bundles app
 
-# 4. Install
 APP_SRC="src-tauri/target/release/bundle/macos/ClawDesk.app"
 rm -rf /Applications/ClawDesk.app
 ditto "$APP_SRC" /Applications/ClawDesk.app
@@ -57,6 +59,45 @@ Open **ClawDesk** from `/Applications` or Spotlight.
 
 > **Why `ditto` and `codesign`?**
 > macOS `.app` bundles must be copied with `ditto` (not `cp -R`) to preserve resource forks and code signatures. `codesign` re-signs the bundle for local distribution without an Apple Developer certificate.
+
+### Linux — Build from source
+
+**System dependencies (Debian/Ubuntu):**
+```bash
+sudo apt update
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev \
+  libayatana-appindicator3-dev librsvg2-dev \
+  build-essential curl
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install -y webkit2gtk4.1-devel openssl-devel gtk3-devel \
+  libappindicator-gtk3-devel librsvg2-devel
+```
+
+**Then build:**
+```bash
+git clone https://github.com/lucvpgs/ClawDesk.git
+cd ClawDesk
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+npm install -g pnpm
+pnpm install
+pnpm build
+PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build
+```
+
+Install the `.deb` or use the `.AppImage`:
+```bash
+# Debian/Ubuntu
+sudo dpkg -i src-tauri/target/release/bundle/deb/clawdesk_*.deb
+
+# AppImage (any distro)
+chmod +x src-tauri/target/release/bundle/appimage/clawdesk_*.AppImage
+./src-tauri/target/release/bundle/appimage/clawdesk_*.AppImage
+```
 
 ---
 
@@ -143,4 +184,5 @@ PATH="$HOME/.cargo/bin:$PATH" pnpm tauri dev   # Tauri window pointing to dev se
 
 - ClawDesk reads directly from `~/.openclaw/` — changes take effect immediately
 - `.env.local` is never committed — each installation has its own credentials
-- Tested on macOS (Apple Silicon)
+- Tested on macOS (Apple Silicon) and Ubuntu 22.04 (x86_64)
+- Windows support is planned — binary path detection and PATH separator handling are implemented but the release pipeline and installer are not yet ready

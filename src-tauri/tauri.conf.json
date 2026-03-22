@@ -47,6 +47,14 @@
       "signingIdentity": null,
       "providerShortName": null
     },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37", "libssl3 | libssl1.1", "libgtk-3-0"]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"

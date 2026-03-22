@@ -50,17 +50,37 @@ fn tauri_token() -> &'static str {
 // ── Node.js discovery ────────────────────────────────────────────────────────
 
 fn find_node() -> String {
-    let candidates = [
-        "/opt/homebrew/bin/node", // Apple Silicon Homebrew
-        "/usr/local/bin/node",    // Intel Homebrew / nvm default
-        "/usr/bin/node",          // system Node
+    #[cfg(target_os = "windows")]
+    let candidates: &[&str] = &[
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Program Files (x86)\\nodejs\\node.exe",
+    ];
+    #[cfg(not(target_os = "windows"))]
+    let candidates: &[&str] = &[
+        "/opt/homebrew/bin/node", // macOS Apple Silicon (Homebrew)
+        "/usr/local/bin/node",    // macOS Intel / nvm / Linux custom
+        "/usr/bin/node",          // Linux system
+        "/usr/bin/nodejs",        // Debian/Ubuntu alternate package name
+        "/snap/bin/node",         // Linux snap
     ];
     for path in candidates {
         if std::path::Path::new(path).exists() {
             return path.to_string();
         }
     }
-    "node".to_string()
+    // Last resort: try which/where
+    let which = if cfg!(target_os = "windows") { "where" } else { "which" };
+    if let Ok(out) = std::process::Command::new(which).arg("node").output() {
+        if out.status.success() {
+            if let Ok(s) = String::from_utf8(out.stdout) {
+                let found = s.lines().next().unwrap_or("").trim().to_string();
+                if !found.is_empty() {
+                    return found;
+                }
+            }
+        }
+    }
+    if cfg!(target_os = "windows") { "node.exe".to_string() } else { "node".to_string() }
 }
 
 // ── Path helpers ─────────────────────────────────────────────────────────────

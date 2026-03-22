@@ -9,25 +9,46 @@ import os from "os";
 import { execSync } from "child_process";
 import type { OpenClawConfig, ScanResult } from "@/types";
 
-const BINARY_PATHS = [
-  "/opt/homebrew/bin/openclaw",
-  "/usr/local/bin/openclaw",
-  "/usr/bin/openclaw",
-  path.join(os.homedir(), ".local/bin/openclaw"),
-];
+const isWin = process.platform === "win32";
+
+function getOpenClawBinaryPaths(): string[] {
+  const home = os.homedir();
+  if (isWin) {
+    const pf = process.env["ProgramFiles"] ?? "C:\\Program Files";
+    return [
+      path.join(home, "AppData", "Roaming", "npm", "openclaw.cmd"),
+      path.join(home, ".local", "bin", "openclaw.cmd"),
+      path.join(home, "scoop", "shims", "openclaw.cmd"),
+      path.join(pf, "openclaw", "openclaw.cmd"),
+    ];
+  }
+  return [
+    "/opt/homebrew/bin/openclaw",       // macOS Apple Silicon
+    "/usr/local/bin/openclaw",          // macOS Intel / Linux custom
+    "/usr/bin/openclaw",                // Linux system
+    "/snap/bin/openclaw",               // Linux snap
+    path.join(home, ".local/bin/openclaw"),
+    path.join(home, ".npm-global/bin/openclaw"),
+    path.join(home, ".volta/bin/openclaw"),
+  ];
+}
 
 export function findOpenClawBinary(): string | null {
-  for (const p of BINARY_PATHS) {
+  for (const p of getOpenClawBinaryPaths()) {
     if (fs.existsSync(p)) return p;
   }
   try {
-    const extraPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
-    const PATH = process.env.PATH ? `${process.env.PATH}:${extraPaths}` : extraPaths;
-    const found = execSync("which openclaw", {
+    const whichCmd = isWin ? "where" : "which";
+    const sep = isWin ? ";" : ":";
+    const extraPaths = isWin
+      ? `${os.homedir()}\\AppData\\Roaming\\npm`
+      : "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+    const PATH = process.env.PATH ? `${process.env.PATH}${sep}${extraPaths}` : extraPaths;
+    const found = execSync(`${whichCmd} openclaw`, {
       encoding: "utf-8",
       timeout: 2000,
       env: { ...process.env, PATH },
-    }).trim();
+    }).trim().split(/\r?\n/)[0];
     if (found) return found;
   } catch { /* not found in PATH */ }
   return null;
