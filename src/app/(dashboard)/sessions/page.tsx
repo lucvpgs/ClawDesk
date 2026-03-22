@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   MessageSquare, Bot, RefreshCw, ChevronRight, Wrench,
   ChevronDown, Terminal, User, Loader2, AlertCircle,
-  Cpu, Clock,
+  Cpu, Clock, Copy, Check,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName } from "@/lib/agent-colors";
@@ -152,6 +152,15 @@ function TurnRow({ turn, accent }: { turn: ParsedTurn; accent: ReturnType<typeof
 // ── Session messages panel ────────────────────────────────────────────────────
 function SessionPanel({ session, onClose }: { session: SessionMeta; onClose: () => void }) {
   const accent = agentAccent(session.agentId);
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    const cmd = `openclaw --session ${session.sessionId} --agent ${session.agentId}`;
+    navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   const { data, isLoading, isError } = useQuery<{ turns: ParsedTurn[]; total: number }>({
     queryKey: ["session-messages", session.sessionId, session.agentId],
@@ -194,6 +203,16 @@ function SessionPanel({ session, onClose }: { session: SessionMeta; onClose: () 
             </div>
             <div className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">{session.sessionId}</div>
           </div>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] border rounded transition-colors shrink-0 text-zinc-500 border-zinc-700 hover:text-zinc-200 hover:border-zinc-500"
+            title="Copy CLI command to continue this session"
+          >
+            {copied
+              ? <><Check className="w-3 h-3 text-emerald-400" /> Copied!</>
+              : <><Copy className="w-3 h-3" /> Continue</>
+            }
+          </button>
           <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0 ml-2">
             ✕
           </button>
@@ -249,6 +268,7 @@ function SessionPanel({ session, onClose }: { session: SessionMeta; onClose: () 
 export default function SessionsPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   const [selectedSession, setSelectedSession] = useState<SessionMeta | null>(null);
+  const [dateFilter, setDateFilter] = useState<"today" | "week" | "all">("all");
 
   const { data, isLoading, refetch } = useQuery<{ sessions: SessionMeta[] }>({
     queryKey: ["sessions", selectedAgentId],
@@ -262,9 +282,19 @@ export default function SessionsPage() {
   // Unique agent IDs from all sessions
   const agentIds = ["all", ...Array.from(new Set(sessions.map((s) => s.agentId))).sort()];
 
+  const now = Date.now();
+  const dateFiltered = sessions.filter((s) => {
+    if (dateFilter === "today") {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      return s.updatedAt >= startOfDay.getTime();
+    }
+    if (dateFilter === "week") return s.updatedAt >= now - 7 * 24 * 60 * 60 * 1000;
+    return true;
+  });
   const filtered = selectedAgentId === "all"
-    ? sessions
-    : sessions.filter((s) => s.agentId === selectedAgentId);
+    ? dateFiltered
+    : dateFiltered.filter((s) => s.agentId === selectedAgentId);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -286,6 +316,25 @@ export default function SessionsPage() {
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      {/* Date filter */}
+      <div className="flex items-center gap-1.5">
+        {(["today", "week", "all"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setDateFilter(f)}
+            className={cn(
+              "px-3 py-1.5 text-xs rounded-lg border transition-colors capitalize",
+              dateFilter === f
+                ? "bg-zinc-800 border-zinc-600 text-zinc-200"
+                : "border-zinc-800 text-zinc-600 hover:text-zinc-400"
+            )}
+          >
+            {f === "today" ? "Today" : f === "week" ? "Last 7 days" : "All time"}
+          </button>
+        ))}
+        <span className="text-xs text-zinc-700 ml-1">{filtered.length} sessions</span>
       </div>
 
       {/* Agent filter tabs */}

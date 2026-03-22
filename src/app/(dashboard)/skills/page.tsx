@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Plus, X, ChevronRight, Bot, Crown, ExternalLink,
-  Github, Loader2, Download, Trash2, FileText,
+  Github, Loader2, Download, Trash2, FileText, Pencil, Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentInitial } from "@/lib/agent-colors";
@@ -149,18 +149,58 @@ function GitHubInstallModal({
 }
 
 // ── Skill Content Viewer Modal ────────────────────────────────────────────────
-function SkillViewerModal({ skillName, onClose }: { skillName: string; onClose: () => void }) {
+function SkillViewerModal({ skillName, onClose, onSaved }: { skillName: string; onClose: () => void; onSaved?: () => void }) {
+  const qc = useQueryClient();
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery<{ ok: boolean; content: string }>({
     queryKey: ["skill-content", skillName],
     queryFn: () => fetch(`/api/skills/${encodeURIComponent(skillName)}`).then((r) => r.json()),
     staleTime: 60_000,
   });
 
-  // Split frontmatter from body
+  // Sync editContent when data loads
+  useEffect(() => {
+    if (data?.content !== undefined) setEditContent(data.content);
+  }, [data?.content]);
+
   const raw = data?.content ?? "";
   const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const frontmatter = fmMatch ? fmMatch[1] : null;
   const body = fmMatch ? fmMatch[2] : raw;
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent }),
+      });
+      const json = await res.json() as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? "Save failed");
+      qc.setQueryData(["skill-content", skillName], { ok: true, content: editContent });
+      qc.invalidateQueries({ queryKey: ["skills-catalog"] });
+      setEditMode(false);
+      onSaved?.();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDiscard() {
+    setEditContent(data?.content ?? "");
+    setEditMode(false);
+    setSaveError(null);
+  }
+
+  const isDirty = editMode && editContent !== (data?.content ?? "");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -173,10 +213,52 @@ function SkillViewerModal({ skillName, onClose }: { skillName: string; onClose: 
           <FileText className="w-4 h-4 text-violet-400 shrink-0" />
           <span className="text-sm font-medium text-zinc-100 font-mono">{skillName}</span>
           <span className="text-[10px] text-zinc-600 ml-1">SKILL.md</span>
-          <button onClick={onClose} className="ml-auto text-zinc-600 hover:text-zinc-300 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+          {isDirty && <span className="text-[10px] text-amber-400">● unsaved</span>}
+          <div className="ml-auto flex items-center gap-1.5">
+            {editMode ? (
+              <>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded transition-colors"
+                >
+                  <Save className="w-3 h-3" />
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={handleDiscard}
+                  disabled={saving}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded transition-colors"
+                >
+                  Discard
+                </button>
+              </>
+            ) : (
+              !isLoading && data?.ok && (
+                <button
+                  onClick={() => { setEditMode(true); setSaveError(null); }}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 rounded transition-colors"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </button>
+              )
+            )}
+            <button onClick={onClose} className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors ml-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Save error */}
+        {saveError && (
+          <div className="flex items-center justify-between px-5 py-2 bg-red-950/50 border-b border-red-900/50 shrink-0">
+            <span className="text-xs text-red-400">{saveError}</span>
+            <button onClick={() => setSaveError(null)} className="text-red-600 hover:text-red-400">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
@@ -186,16 +268,22 @@ function SkillViewerModal({ skillName, onClose }: { skillName: string; onClose: 
             </div>
           ) : !data?.ok ? (
             <div className="py-12 text-center text-xs text-red-400">Could not load skill content.</div>
+          ) : editMode ? (
+            <textarea
+              className="w-full h-full min-h-[420px] px-5 py-4 text-xs text-zinc-300 font-mono bg-transparent resize-none outline-none leading-relaxed"
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              autoFocus
+              spellCheck={false}
+            />
           ) : (
             <>
-              {/* Frontmatter */}
               {frontmatter && (
                 <div className="px-5 py-3 bg-violet-950/20 border-b border-violet-900/30">
                   <p className="text-[9px] uppercase tracking-wider text-violet-600 mb-1.5">Frontmatter</p>
                   <pre className="text-[11px] text-violet-300 font-mono whitespace-pre-wrap leading-relaxed">{frontmatter}</pre>
                 </div>
               )}
-              {/* Body */}
               <div className="px-5 py-4">
                 <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap leading-relaxed">{body.trim()}</pre>
               </div>

@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CommandPalette, useCommandPalette } from "@/components/CommandPalette";
 import { useTheme } from "@/components/ThemeProvider";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function Topbar() {
   const { activeRuntime } = useRuntimeStore();
@@ -78,6 +79,9 @@ export function Topbar() {
             : <Moon className="w-3.5 h-3.5" />
           }
         </button>
+
+        {/* Notification bell */}
+        <NotificationBell />
 
         <button
           onClick={handleSync}

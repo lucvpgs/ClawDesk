@@ -14,8 +14,11 @@ import {
   Save,
   Download,
   XCircle,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface DirEntry {
   name: string;
@@ -62,6 +65,7 @@ export default function DocsPage() {
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [extFilter, setExtFilter] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery<DocsData>({
@@ -88,6 +92,11 @@ export default function DocsPage() {
       setEditContent(fileData.content);
     }
   }, [fileData?.content]);
+
+  // Reset ext filter when navigating to a new directory
+  useEffect(() => {
+    setExtFilter(null);
+  }, [cwd]);
 
   const isDirty = editMode && editContent !== (fileData?.content ?? "");
 
@@ -133,7 +142,19 @@ export default function DocsPage() {
 
   const entries = data?.entries ?? [];
   const dirs = entries.filter((e) => e.type === "dir");
-  const files = entries.filter((e) => e.type === "file");
+  const allFiles = entries.filter((e) => e.type === "file");
+
+  // Unique extensions in current directory
+  const allExts = Array.from(new Set(
+    allFiles.map((f) => {
+      const dot = f.name.lastIndexOf(".");
+      return dot > 0 ? f.name.slice(dot) : "";
+    }).filter(Boolean)
+  )).sort();
+
+  const files = extFilter
+    ? allFiles.filter((f) => f.name.endsWith(extFilter))
+    : allFiles;
 
   const breadcrumbs = cwd ? cwd.split("/") : [];
 
@@ -187,6 +208,37 @@ export default function DocsPage() {
               <ArrowLeft className="w-3 h-3" />
               Back
             </button>
+          )}
+
+          {/* File type filter chips */}
+          {allExts.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              <button
+                onClick={() => setExtFilter(null)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 text-[10px] rounded border transition-colors",
+                  extFilter === null
+                    ? "bg-zinc-700 border-zinc-600 text-zinc-200"
+                    : "border-zinc-800 text-zinc-600 hover:text-zinc-400"
+                )}
+              >
+                All
+              </button>
+              {allExts.map((ext) => (
+                <button
+                  key={ext}
+                  onClick={() => setExtFilter(extFilter === ext ? null : ext)}
+                  className={cn(
+                    "px-2 py-0.5 text-[10px] rounded border transition-colors font-mono",
+                    extFilter === ext
+                      ? "bg-violet-900/40 border-violet-700/60 text-violet-300"
+                      : "border-zinc-800 text-zinc-600 hover:text-zinc-400"
+                  )}
+                >
+                  {ext}
+                </button>
+              ))}
+            </div>
           )}
 
           {isLoading ? (
@@ -311,6 +363,38 @@ export default function DocsPage() {
                     autoFocus
                     spellCheck={false}
                   />
+                ) : openFile?.endsWith(".md") ? (
+                  <div className="px-5 py-4 text-xs text-zinc-300 leading-relaxed prose-sm">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({ children }) => <h1 className="text-base font-bold text-zinc-100 mb-2 mt-4 first:mt-0 border-b border-zinc-800 pb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-semibold text-zinc-200 mb-1.5 mt-3 first:mt-0">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-xs font-semibold text-zinc-300 mb-1 mt-2 first:mt-0">{children}</h3>,
+                        p: ({ children }) => <p className="text-zinc-400 mb-2 leading-relaxed">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside text-zinc-400 mb-2 space-y-0.5 pl-2">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside text-zinc-400 mb-2 space-y-0.5 pl-2">{children}</ol>,
+                        li: ({ children }) => <li className="text-zinc-400">{children}</li>,
+                        code: ({ children, className }) => {
+                          const isBlock = className?.includes("language-");
+                          return isBlock
+                            ? <code className="block bg-zinc-800/60 rounded px-3 py-2 font-mono text-[10px] text-emerald-300 whitespace-pre-wrap overflow-x-auto mb-2">{children}</code>
+                            : <code className="bg-zinc-800 rounded px-1 py-0.5 font-mono text-[10px] text-violet-300">{children}</code>;
+                        },
+                        pre: ({ children }) => <pre className="bg-zinc-800/60 rounded-lg overflow-hidden mb-2">{children}</pre>,
+                        blockquote: ({ children }) => <blockquote className="border-l-2 border-violet-700 pl-3 text-zinc-500 italic mb-2">{children}</blockquote>,
+                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 underline">{children}</a>,
+                        strong: ({ children }) => <strong className="text-zinc-200 font-semibold">{children}</strong>,
+                        em: ({ children }) => <em className="text-zinc-400 italic">{children}</em>,
+                        hr: () => <hr className="border-zinc-800 my-3" />,
+                        table: ({ children }) => <table className="w-full text-[10px] border-collapse mb-2">{children}</table>,
+                        th: ({ children }) => <th className="border border-zinc-700 px-2 py-1 text-zinc-300 font-medium bg-zinc-800/40 text-left">{children}</th>,
+                        td: ({ children }) => <td className="border border-zinc-700 px-2 py-1 text-zinc-500">{children}</td>,
+                      }}
+                    >
+                      {fileData?.content ?? ""}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <pre className="px-4 py-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap break-words leading-relaxed">
                     {fileData?.content ?? "Loading…"}

@@ -28,6 +28,28 @@ export async function GET(
   return NextResponse.json({ ok: true, name, content });
 }
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ name: string }> }
+) {
+  const { name } = await params;
+  if (!name || !/^[\w-]+$/.test(name)) {
+    return NextResponse.json({ ok: false, error: "Invalid skill name" }, { status: 400 });
+  }
+  const skillDir = path.join(WORKSPACE_SKILLS, name);
+  if (!existsSync(skillDir)) {
+    return NextResponse.json({ ok: false, error: "Skill not found in workspace" }, { status: 404 });
+  }
+  try {
+    const { content } = await req.json();
+    writeFileSync(path.join(skillDir, "SKILL.md"), content, "utf-8");
+    return NextResponse.json({ ok: true, name });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ ok: false, error }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ name: string }> }
