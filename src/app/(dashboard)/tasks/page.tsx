@@ -7,6 +7,7 @@ import {
   ChevronDown, Save, CalendarClock, ExternalLink, Clock,
   MessageSquare, Send, Trash2, User, Bot,
 } from "lucide-react";
+import { ExportMenu } from "@/components/ExportMenu";
 import { cn, timeAgo } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName, KNOWN_AGENTS, RuntimeAgent } from "@/lib/agent-colors";
 import { projectAccent } from "@/lib/project-colors";
@@ -174,13 +175,20 @@ export default function TasksPage() {
         <div>
           <h1 className="text-base font-semibold text-zinc-100">Tasks</h1>
         </div>
-        <button
-          onClick={() => { setAddingTo("todo"); setNewTitle(""); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New task
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            entity="tasks"
+            data={allTasks as unknown as Record<string, unknown>[]}
+            columns={["id","title","description","status","priority","assignedAgentId","projectId","dueAt","completedAt","createdAt","notes","proof"]}
+          />
+          <button
+            onClick={() => { setAddingTo("todo"); setNewTitle(""); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New task
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}

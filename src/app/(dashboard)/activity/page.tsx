@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw, Zap, Bot, CalendarClock, CheckSquare,
          X, Clock, FolderKanban, ChevronDown, ChevronUp } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
+import { ExportMenu } from "@/components/ExportMenu";
 
 interface ActivityEvent {
   id: string;
@@ -87,12 +88,19 @@ export default function ActivityPage() {
               {mainEvents.length} events · {syncEvents.length} runtime syncs
             </p>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportMenu
+              entity="activity"
+              data={events as unknown as Record<string, unknown>[]}
+              columns={["id","eventType","entityType","entityId","summary","occurredAt"]}
+            />
+            <button
+              onClick={() => refetch()}
+              className="p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
