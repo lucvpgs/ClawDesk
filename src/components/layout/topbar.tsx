@@ -4,14 +4,16 @@ import { useRuntimeStore } from "@/lib/store";
 import { statusDot } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useAutoSync } from "@/hooks/use-auto-sync";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { CommandPalette, useCommandPalette } from "@/components/CommandPalette";
 
 export function Topbar() {
   const { activeRuntime } = useRuntimeStore();
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
+  const { open, setOpen } = useCommandPalette();
 
   useAutoSync();
 
@@ -52,6 +54,17 @@ export function Topbar() {
       )}
 
       <div className="ml-auto flex items-center gap-2">
+        {/* ⌘K search trigger */}
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-2 px-2.5 py-1 text-zinc-600 hover:text-zinc-400 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-colors text-xs"
+          title="Search (⌘K)"
+        >
+          <Search className="w-3 h-3" />
+          <span className="hidden sm:block">Search</span>
+          <kbd className="hidden sm:block text-[10px] font-mono bg-zinc-900 border border-zinc-700 rounded px-1">⌘K</kbd>
+        </button>
+
         <button
           onClick={handleSync}
           disabled={syncing}
@@ -61,6 +74,8 @@ export function Topbar() {
           <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      <CommandPalette open={open} onClose={() => setOpen(false)} />
     </header>
   );
 }
