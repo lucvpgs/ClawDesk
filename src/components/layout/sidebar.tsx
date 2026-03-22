@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  DollarSign,
   Bot,
   CheckSquare,
   FolderKanban,
@@ -37,6 +38,7 @@ const STORAGE_KEY = "clawdesk:lastSeenOpenclawVersion";
 
 const navItems = [
   { label: "Overview",  href: "/overview",  icon: LayoutDashboard },
+  { label: "Cost",      href: "/cost",      icon: DollarSign      },
   { label: "Agents",    href: "/agents",    icon: Bot             },
   { label: "Sessions",  href: "/sessions",  icon: MessageSquare   },
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare     },
