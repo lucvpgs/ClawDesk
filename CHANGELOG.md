@@ -4,6 +4,23 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
+## [0.5.1] — 2026-03-22
+
+### Fixed
+- **White screen on fresh install** — when Node.js is missing or the embedded server fails to start, ClawDesk now shows a helpful error page (with Node.js install instructions and a Retry button) instead of a blank screen
+- **server.js not found** — added explicit existence check with a clear log message before attempting to start the server; fail-fast instead of silent connection timeout
+- **Agent identity mismatch** — task and schedule assignment dropdowns now fetch live agents from the runtime (`/api/agents`) instead of a hardcoded list; falls back to the built-in list when the gateway is offline
+- **`/api/system` timeouts (25 s+)** — replaced synchronous `execSync` with async `exec` (`promisify`) in `GatewayClient`; `getStatus()`, `getHealth()`, `getAgents()`, etc. no longer block the Node.js event loop; `scanLocalOpenClaw()` now runs in parallel; CLI timeout reduced from 10 s to 5 s
+- **Skill install fails in onboarding** — `skill/SKILL.md` is now copied into the standalone bundle during build, so the install route can find it at runtime via `process.cwd()/skill/SKILL.md`
+- **Missing operator.read scope** — all `openclaw gateway call` and `openclaw cron` CLI invocations now pass `--token` and `--url` explicitly, so they authenticate with operator-level credentials instead of falling back to limited defaults
+- **OpenClaw version stale after gateway update** — `/api/openclaw/version` now queries the live `/health` endpoint on the gateway (2.5 s timeout) and prefers the running version over the cached `meta.lastTouchedVersion` in `openclaw.json`
+
+### Changed
+- `GatewayClient` CLI timeout reduced from 10 000 ms to 5 000 ms across all methods
+- `RuntimeAgent` interface extracted to `src/lib/agent-colors.ts` and shared across Tasks and Schedules pages
+
+---
+
 ## [0.5.0] — 2026-03-22
 
 ### Added
