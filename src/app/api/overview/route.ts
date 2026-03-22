@@ -5,7 +5,7 @@ import {
   runtimeSessions, runtimeCronJobs, runtimeChannels,
   activityEvents, tasks,
 } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, ne } from "drizzle-orm";
 import { execSync } from "child_process";
 import { cliEnv } from "@/server/cli-env";
 import fs from "fs";
@@ -156,7 +156,10 @@ export async function GET() {
     db.select().from(runtimeChannels)
       .where(eq(runtimeChannels.runtimeSourceId, source.id)),
     db.select().from(activityEvents)
-      .where(eq(activityEvents.runtimeSourceId, source.id))
+      .where(and(
+        eq(activityEvents.runtimeSourceId, source.id),
+        ne(activityEvents.eventType, "sync"),
+      ))
       .orderBy(desc(activityEvents.occurredAt)).limit(8),
     db.select().from(tasks),
   ]);
