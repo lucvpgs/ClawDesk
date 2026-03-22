@@ -6,7 +6,9 @@ import {
   Bot, Activity, Cpu, RefreshCw, Crown, Plus, X,
   FileText, ChevronRight, Save, Trash2, AlertCircle,
   Package, ExternalLink, Send, Loader2, CheckCircle2, XCircle,
+  LayoutList, Share2,
 } from "lucide-react";
+import { OrchestrationGraph } from "@/components/OrchestrationGraph";
 import { cn, statusDot } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName } from "@/lib/agent-colors";
 
@@ -54,6 +56,7 @@ export default function AgentsPage() {
   const [selectedId, setSelectedId]       = useState<string | null>(null);
   const [showCreate, setShowCreate]       = useState(false);
   const [runAgentFor, setRunAgentFor]     = useState<AgentData | null>(null);
+  const [view, setView]                   = useState<"list" | "graph">("list");
 
   const { data: runtimeData, isLoading, refetch } = useQuery<{ agents: AgentData[] }>({
     queryKey: ["agents"],
@@ -82,6 +85,29 @@ export default function AgentsPage() {
           <p className="text-xs text-zinc-500 mt-0.5">{agents.length} agents configured</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setView("list")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded transition-colors",
+                view === "list" ? "bg-zinc-700 text-zinc-100" : "text-zinc-600 hover:text-zinc-400"
+              )}
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              List
+            </button>
+            <button
+              onClick={() => setView("graph")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded transition-colors",
+                view === "graph" ? "bg-zinc-700 text-zinc-100" : "text-zinc-600 hover:text-zinc-400"
+              )}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Graph
+            </button>
+          </div>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors"
@@ -102,6 +128,14 @@ export default function AgentsPage() {
         <div className="text-sm text-zinc-500 py-8 text-center">Loading…</div>
       ) : agents.length === 0 ? (
         <div className="text-sm text-zinc-600 py-8 text-center">No agents synced.</div>
+      ) : view === "graph" ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <OrchestrationGraph
+            configs={configs}
+            runtimeAgents={agents}
+            onSelectAgent={(id) => setSelectedId(id)}
+          />
+        </div>
       ) : (
         <div className="space-y-6">
           {mainAgent && (
