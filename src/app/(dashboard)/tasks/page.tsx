@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, X, RefreshCw, Circle, CheckCircle2, AlertCircle,
   ChevronDown, Save, CalendarClock, ExternalLink, Clock,
+  MessageSquare, Send, Trash2, User, Bot,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { agentAccent, agentInitial, agentDisplayName, KNOWN_AGENTS, RuntimeAgent } from "@/lib/agent-colors";
@@ -462,6 +463,39 @@ function TaskDetailPanel({
   const [notes, setNotes]       = useState((task as Task & { notes?: string | null }).notes ?? "");
   const [dueAt, setDueAt]       = useState(task.dueAt ?? "");
   const [saving, setSaving]     = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+
+  const qcLocal = useQueryClient();
+
+  interface TaskComment { id: string; taskId: string; author: string; body: string; createdAt: string; }
+
+  const { data: commentsData, refetch: refetchComments } = useQuery<{ comments: TaskComment[] }>({
+    queryKey: ["task-comments", task.id],
+    queryFn: () => fetch(`/api/tasks/${task.id}/comments`).then((r) => r.json()),
+  });
+  const comments = commentsData?.comments ?? [];
+
+  async function handlePostComment() {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      await fetch(`/api/tasks/${task.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newComment.trim() }),
+      });
+      setNewComment("");
+      refetchComments();
+    } finally {
+      setPostingComment(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    await fetch(`/api/tasks/${task.id}/comments/${commentId}`, { method: "DELETE" });
+    qcLocal.invalidateQueries({ queryKey: ["task-comments", task.id] });
+  }
 
   const accent     = agentAccent(task.assignedAgentId);
   const projColor  = projectAccent(task.projectId);
@@ -629,6 +663,89 @@ function TaskDetailPanel({
             {task.completedAt && <MetaRow label="Completed" value={new Date(task.completedAt).toLocaleString()} />}
             {task.linkedCronJobId && <MetaRow label="Cron job" value={task.linkedCronJobId} mono />}
             {task.linkedSessionId && <MetaRow label="Session"  value={task.linkedSessionId} mono />}
+          </div>
+
+          {/* Comments */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="text-[10px] uppercase tracking-wider text-zinc-600">Comments</span>
+              {comments.length > 0 && (
+                <span className="text-[10px] text-zinc-700 ml-auto">{comments.length}</span>
+              )}
+            </div>
+
+            {/* Comment list */}
+            {comments.length > 0 && (
+              <div className="space-y-2">
+                {comments.map((c) => (
+                  <div key={c.id} className="group flex gap-2.5">
+                    {/* Avatar */}
+                    <div className={cn(
+                      "w-6 h-6 rounded-full shrink-0 flex items-center justify-center mt-0.5",
+                      c.author === "user" ? "bg-zinc-700" : agentAccent(c.author).avatar
+                    )}>
+                      {c.author === "user"
+                        ? <User className="w-3 h-3 text-zinc-400" />
+                        : <Bot  className="w-3 h-3 text-zinc-900" />
+                      }
+                    </div>
+                    {/* Body */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={cn(
+                          "text-[10px] font-medium",
+                          c.author === "user" ? "text-zinc-400" : agentAccent(c.author).text
+                        )}>
+                          {c.author === "user" ? "You" : c.author}
+                        </span>
+                        <span className="text-[10px] text-zinc-700">{timeAgo(c.createdAt)}</span>
+                        <button
+                          onClick={() => handleDeleteComment(c.id)}
+                          className="ml-auto p-0.5 text-zinc-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Delete comment"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+                        {c.body}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {comments.length === 0 && (
+              <p className="text-[10px] text-zinc-700 py-2">No comments yet.</p>
+            )}
+
+            {/* New comment input */}
+            <div className="flex gap-2 pt-1">
+              <textarea
+                rows={2}
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600 resize-none placeholder:text-zinc-700"
+                placeholder="Add a comment…"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    handlePostComment();
+                  }
+                }}
+                disabled={postingComment}
+              />
+              <button
+                onClick={handlePostComment}
+                disabled={!newComment.trim() || postingComment}
+                className="self-end p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 rounded border border-zinc-700 disabled:opacity-40 transition-colors"
+                title="Post (⌘↵)"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 

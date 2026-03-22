@@ -124,6 +124,14 @@ export const activityEvents = sqliteTable("activity_events", {
   occurredAt: text("occurred_at").notNull().default(sql`(datetime('now'))`),
 });
 
+export const taskComments = sqliteTable("task_comments", {
+  id:        text("id").primaryKey(),
+  taskId:    text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  author:    text("author").notNull().default("user"),  // "user" | agentId
+  body:      text("body").notNull(),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type RuntimeSource = typeof runtimeSources.$inferSelect;
@@ -135,3 +143,4 @@ export type RuntimeChannel = typeof runtimeChannels.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type ActivityEvent = typeof activityEvents.$inferSelect;
+export type TaskComment = typeof taskComments.$inferSelect;
