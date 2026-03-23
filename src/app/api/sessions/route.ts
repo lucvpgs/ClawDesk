@@ -3,24 +3,17 @@
  * Lists sessions for one or all agents via `openclaw sessions --json`.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
-import { findOpenClawBinary } from "@/server/connector/openclaw-scan";
+import { cliRun } from "@/server/cli-run";
 
 export async function GET(req: NextRequest) {
   const agentId = req.nextUrl.searchParams.get("agentId");
-  const bin = findOpenClawBinary() ?? "openclaw";
 
   try {
-    const flags = agentId && agentId !== "all"
-      ? `--agent ${agentId}`
-      : "--all-agents";
+    const agentArgs = agentId && agentId !== "all"
+      ? ["--agent", agentId]
+      : ["--all-agents"];
 
-    const out = execSync(`${bin} sessions ${flags} --json`, {
-      timeout: 8_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["sessions", ...agentArgs, "--json"], { timeout: 8_000 });
 
     const data = JSON.parse(out);
     const sessions = (data?.sessions ?? [])

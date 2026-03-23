@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { UpdateBanner } from "@/components/UpdateBanner";
 
 export const metadata: Metadata = {
-  title: "Clawdesk — Mission Control",
+  title: "ClawDesk — Mission Control",
   description: "Operator console for OpenClaw AI systems",
 };
 

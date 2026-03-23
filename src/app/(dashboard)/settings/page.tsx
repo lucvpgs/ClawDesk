@@ -66,6 +66,7 @@ const TABS = [
   { key: "approvals",    label: "Approvals"        },
   { key: "integrations", label: "Integrations"    },
   { key: "backup",       label: "Backup & Restore" },
+  { key: "system",       label: "System"           },
 ];
 
 // ── Page wrapper ──────────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ function SettingsContent() {
         {activeTab === "approvals"    && <ApprovalsTab />}
         {activeTab === "integrations" && <IntegrationsTab />}
         {activeTab === "backup"       && <BackupTab />}
+        {activeTab === "system"       && <SystemTab />}
       </div>
     </div>
   );
@@ -1996,6 +1998,202 @@ function BackupTabContent() {
               </div>
             )}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 6 — System (Background Service / LaunchAgent)
+// ══════════════════════════════════════════════════════════════════════════════
+
+interface LaunchAgentStatus {
+  installed:  boolean;
+  loaded:     boolean;
+  running:    boolean;
+  plistPath:  string;
+  serverJs:   string;
+  appPresent: boolean;
+  logDir:     string;
+}
+
+function SystemTab() {
+  const { data, isLoading, refetch } = useQuery<LaunchAgentStatus>({
+    queryKey: ["launchagent-status"],
+    queryFn:  () => fetch("/api/system/launchagent").then((r) => r.json()),
+    refetchInterval: 8_000,
+  });
+
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runAction(action: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res  = await fetch("/api/system/launchagent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!json.ok) setError(json.error ?? "Action failed");
+      setTimeout(() => refetch(), 1200);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const installed  = data?.installed  ?? false;
+  const loaded     = data?.loaded     ?? false;
+  const running    = data?.running    ?? false;
+  const appPresent = data?.appPresent ?? false;
+
+  const statusLabel =
+    running   ? "running"      :
+    loaded    ? "loaded (idle)" :
+    installed ? "installed (not loaded)" :
+                "not installed";
+
+  const statusColor_ =
+    running   ? "text-emerald-400" :
+    loaded    ? "text-amber-400"   :
+    installed ? "text-zinc-400"    :
+                "text-zinc-600";
+
+  return (
+    <div className="space-y-6">
+      {/* Background Service */}
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-100">Background Service</h3>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Run the ClawDesk server at login so OpenClaw agents can interact with it
+            even when the desktop app is closed.
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="text-sm text-zinc-500 py-6 text-center">Checking…</div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+            {/* Status row */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4 text-zinc-500" />
+                <span className="text-sm text-zinc-200">macOS LaunchAgent</span>
+              </div>
+              <span className={`text-xs font-medium ${statusColor_}`}>{statusLabel}</span>
+            </div>
+
+            {/* Detail rows */}
+            <div className="divide-y divide-zinc-800/60">
+              <div className="flex items-center justify-between px-4 py-2">
+                <span className="text-xs text-zinc-500">App bundle</span>
+                <span className={`text-xs font-mono ${appPresent ? "text-zinc-300" : "text-red-400"}`}>
+                  {appPresent ? "/Applications/ClawDesk.app" : "not found"}
+                </span>
+              </div>
+
+              {data?.plistPath && (
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-xs text-zinc-500">Plist</span>
+                  <span className="text-xs font-mono text-zinc-500 truncate max-w-[300px]" title={data.plistPath}>
+                    {data.plistPath.replace(/^\/Users\/[^/]+/, "~")}
+                  </span>
+                </div>
+              )}
+
+              {data?.logDir && installed && (
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-xs text-zinc-500">Logs</span>
+                  <span className="text-xs font-mono text-zinc-500 truncate max-w-[300px]">
+                    {data.logDir.replace(/^\/Users\/[^/]+/, "~")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-zinc-900/50">
+              {!installed ? (
+                <button
+                  onClick={() => runAction("install")}
+                  disabled={busy || !appPresent}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg transition-colors"
+                >
+                  {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  Install &amp; Start
+                </button>
+              ) : (
+                <>
+                  {!loaded && (
+                    <button
+                      onClick={() => runAction("start")}
+                      disabled={busy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+                    >
+                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Radio className="w-3 h-3" />}
+                      Start
+                    </button>
+                  )}
+                  {loaded && (
+                    <button
+                      onClick={() => runAction("stop")}
+                      disabled={busy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-zinc-700 hover:border-zinc-500 disabled:opacity-40 text-zinc-300 rounded-lg transition-colors"
+                    >
+                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                      Stop
+                    </button>
+                  )}
+                  <button
+                    onClick={() => runAction("uninstall")}
+                    disabled={busy}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-red-900/50 hover:border-red-700 disabled:opacity-40 text-red-400 rounded-lg transition-colors ml-auto"
+                  >
+                    {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    Uninstall
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => refetch()}
+                className="p-1.5 text-zinc-600 hover:text-zinc-300 border border-zinc-800 rounded transition-colors ml-auto"
+                title="Refresh status"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-start gap-2 text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            {error}
+          </div>
+        )}
+
+        {!appPresent && !isLoading && (
+          <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              ClawDesk is not installed at <span className="font-mono">/Applications/ClawDesk.app</span>.
+              Build and install the release version first, then come back here to enable the background service.
+            </span>
+          </div>
+        )}
+
+        {installed && !isLoading && (
+          <p className="text-xs text-zinc-600">
+            When the background service is running, opening the ClawDesk app will show the
+            login page — sign in once per session to connect the window to the running server.
+          </p>
         )}
       </div>
     </div>

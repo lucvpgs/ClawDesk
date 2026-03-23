@@ -27,6 +27,7 @@ import {
   Package,
   MessageSquare,
 } from "lucide-react";
+import { SidebarNavProBadge } from "./SidebarNavProBadge";
 
 interface VersionInfo {
   openclawVersion:  string;
@@ -40,20 +41,20 @@ const STORAGE_KEY = "clawdesk:lastSeenOpenclawVersion";
 
 const navItems = [
   { label: "Overview",  href: "/overview",  icon: LayoutDashboard },
-  { label: "Cost",      href: "/cost",      icon: DollarSign      },
-  { label: "Analytics", href: "/analytics", icon: BarChart2       },
-  { label: "Agents",    href: "/agents",    icon: Bot             },
+  { label: "Activity",  href: "/activity",  icon: Activity        },
   { label: "Sessions",  href: "/sessions",  icon: MessageSquare   },
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare     },
   { label: "Projects",  href: "/projects",  icon: FolderKanban    },
   { label: "Schedules", href: "/schedules", icon: CalendarClock   },
+  { label: "Agents",    href: "/agents",    icon: Bot             },
   { label: "Skills",    href: "/skills",    icon: Package         },
   { label: "Models",    href: "/models",    icon: Cpu             },
+  { label: "Analytics", href: "/analytics", icon: BarChart2,       pro: true },
+  { label: "Cost",      href: "/cost",      icon: DollarSign,      pro: true },
   { label: "Memory",    href: "/memory",    icon: Brain           },
   { label: "Docs",      href: "/docs",      icon: FileText        },
-  { label: "Activity",  href: "/activity",  icon: Activity        },
+  { label: "Security",  href: "/security",  icon: Shield,          pro: true },
   { label: "Settings",  href: "/settings",  icon: Settings        },
-  { label: "Security",  href: "/security",  icon: Shield          },
 ];
 
 export function Sidebar() {
@@ -106,7 +107,7 @@ export function Sidebar() {
       <div className="h-12 flex items-center px-4 border-b border-zinc-800 gap-2">
         <Zap className="w-4 h-4 text-violet-400" />
         <span className="text-sm font-semibold tracking-tight text-zinc-100">
-          Clawdesk
+          ClawDesk
         </span>
         <span className="ml-auto text-[10px] text-zinc-600 font-mono">MC</span>
       </div>
@@ -135,6 +136,7 @@ export function Sidebar() {
                 )}
               />
               {item.label}
+              {item.pro && <SidebarNavProBadge />}
             </Link>
           );
         })}

@@ -427,7 +427,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <ProGate feature="Token Analytics">
+      <ProGate feature="Token Analytics" blur>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

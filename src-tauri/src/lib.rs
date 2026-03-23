@@ -311,11 +311,19 @@ pub fn run() {
             }
 
             // ── Main window ───────────────────────────────────────────────
-            // On success: load /api/auth/tauri?token=<TAURI_TOKEN> which sets
-            // the auth cookie and redirects to "/" (no login screen needed).
-            // On failure: load the bundled startup-error.html from public/
-            // so the user sees an actionable message instead of a white screen.
-            let initial_url = if server_ready {
+            // Two cases when server_ready = true:
+            //  a) We just started the server — use the auto-login token URL so
+            //     the user goes straight to the dashboard without a password.
+            //  b) Port was already in use (LaunchAgent / dev server) — we don't
+            //     own that process, so TAURI_AUTO_LOGIN is not set there.
+            //     Navigate to "/" and let the normal login page handle auth.
+            //
+            // On failure: load the bundled startup-error.html from public/.
+            let port_was_free_before = port_free; // captured above before start
+            let initial_url = if !server_ready {
+                WebviewUrl::App(std::path::PathBuf::from("startup-error.html"))
+            } else if port_was_free_before {
+                // We started the server — auto-login works
                 WebviewUrl::External(
                     format!(
                         "http://127.0.0.1:{PORT}/api/auth/tauri?token={}",
@@ -325,7 +333,12 @@ pub fn run() {
                     .unwrap(),
                 )
             } else {
-                WebviewUrl::App(std::path::PathBuf::from("startup-error.html"))
+                // Attached to existing server — go to login page
+                WebviewUrl::External(
+                    format!("http://127.0.0.1:{PORT}/")
+                        .parse()
+                        .unwrap(),
+                )
             };
 
             let window = WebviewWindowBuilder::new(

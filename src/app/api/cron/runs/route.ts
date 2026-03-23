@@ -3,11 +3,10 @@
  * GET — fetch recent cron run history across all jobs via CLI
  */
 import { NextResponse } from "next/server";
-import { execSync } from "child_process";
+import { cliRun } from "@/server/cli-run";
 import { readFileSync, existsSync } from "fs";
 import { homedir } from "os";
 import path from "path";
-import { cliEnv } from "@/server/cli-env";
 
 const JOBS_FILE = path.join(homedir(), ".openclaw", "cron", "jobs.json");
 
@@ -27,11 +26,7 @@ export async function GET() {
 
   for (const id of jobIds.slice(0, 10)) {
     try {
-      const out = execSync(`openclaw cron runs --id ${id}`, {
-        timeout: 5_000,
-        encoding: "utf-8",
-        env: cliEnv(),
-      });
+      const out = cliRun(["cron", "runs", "--id", id], { timeout: 5_000 });
       const data = JSON.parse(out);
       if (Array.isArray(data?.entries)) {
         for (const entry of data.entries.slice(0, 3)) {

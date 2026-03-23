@@ -115,7 +115,7 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="flex items-center gap-2.5 mb-8">
           <Zap className="w-5 h-5 text-violet-400" />
-          <span className="text-lg font-semibold text-zinc-100">Clawdesk</span>
+          <span className="text-lg font-semibold text-zinc-100">ClawDesk</span>
           <span className="text-xs text-zinc-600 ml-1">Mission Control</span>
         </div>
 

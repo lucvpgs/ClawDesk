@@ -323,6 +323,7 @@ export default function SkillsPage() {
 
   const { data: skillsData, isLoading: skillsLoading, refetch: refetchSkills } = useQuery<{
     skills: SkillEntry[];
+    error?: string;
   }>({
     queryKey: ["skills-catalog"],
     queryFn: () => fetch("/api/skills").then((r) => r.json()),
@@ -336,6 +337,7 @@ export default function SkillsPage() {
     queryFn: () => fetch("/api/agents/config").then((r) => r.json()),
   });
 
+  const skillsError = skillsData?.error ?? null;
   const allSkills = skillsData?.skills ?? [];
   const agents    = configData?.agents ?? [];
 
@@ -453,6 +455,20 @@ export default function SkillsPage() {
           </button>
         </div>
       </div>
+
+      {skillsError && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-950/30 border border-amber-800/40 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-amber-300">Could not load skill catalog</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Make sure OpenClaw is installed and the <span className="font-mono text-zinc-400">openclaw</span> binary is in PATH.</p>
+            <p className="text-[10px] text-zinc-600 mt-1 font-mono break-all">{skillsError}</p>
+          </div>
+          <button onClick={() => refetchSkills()} className="shrink-0 p-1 text-zinc-600 hover:text-zinc-300 transition-colors">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-sm text-zinc-500 py-12 text-center">Loading…</div>

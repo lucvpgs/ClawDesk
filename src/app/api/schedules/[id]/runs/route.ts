@@ -3,8 +3,7 @@
  * Fetch run history for a specific cron job via CLI.
  */
 import { NextResponse } from "next/server";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
+import { cliRun } from "@/server/cli-run";
 
 export async function GET(
   _req: Request,
@@ -17,11 +16,7 @@ export async function GET(
   }
 
   try {
-    const out = execSync(`openclaw cron runs --id ${id} --limit 10`, {
-      timeout: 8_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["cron", "runs", "--id", id, "--limit", "10"], { timeout: 8_000 });
 
     const data = JSON.parse(out);
     const entries = Array.isArray(data?.entries) ? data.entries : [];

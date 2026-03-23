@@ -4,6 +4,32 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
+## [0.6.0] — 2026-03-23
+
+### Added
+- **macOS background service** — Settings → System tab; installs a LaunchAgent (`com.vpgs.clawdesk.server`) so the ClawDesk server starts at login and stays running independently of the desktop app; OpenClaw agents can interact with ClawDesk even when the window is closed
+- **Skill auto-update** — `SkillUpdater` component checks the installed `clawdesk` skill version on startup and silently reinstalls if the bundled version is newer; no manual `openclaw skills install` needed after app updates
+- **`cliRun()` helper** (`src/server/cli-run.ts`) — replaces all `execSync` calls with `spawnSync`; captures both stdout and stderr (OpenClaw CLI writes JSON to stderr); all 8 API routes that invoke `openclaw` now use this helper
+- **ProGate blur mode** — Cost Tracker and Token Analytics pages now show blurred preview content with an "Upgrade to Pro" overlay instead of a blank lock screen; gives non-Pro users a real preview of what they'd get
+- **Sidebar PRO badges** — Analytics, Cost, and Security nav items show a small `PRO` badge when the user is not on Pro; badge disappears on activation
+
+### Fixed
+- **Skills page empty** — `openclaw skills list --json` writes output to stderr, not stdout; `execSync` (stdout-only) returned empty string → `JSON.parse("")` crash; fixed by switching to `spawnSync` with `stdout || stderr` fallback
+- **Activity page empty** — task and project events are stored in SQLite with `runtimeSourceId = NULL`, but the query filtered by the runtime source UUID; fixed by adding `OR runtimeSourceId IS NULL` to include local events
+- **End of Day Review cron error** — when ClawDesk was offline at schedule time, the agent reported "ClawDesk not installed" to Discord; fixed the cron prompt to check the API first and skip silently if offline
+- **`process.env.HOME!`** — replaced with `os.homedir()` in version route to avoid crash if HOME is unset
+- **Hardcoded `"1.0.0"` fallback** — version route error handler now calls `getClawdeskVersion()` instead of returning a fixed string
+- **Gateway port hardcoded** — overview route now reads `gateway.port` from `openclaw.json` instead of always using 18789
+- **Branding inconsistency** — `"Clawdesk"` → `"ClawDesk"` corrected in page title (`layout.tsx`), sidebar logo, and onboarding header
+
+### Changed
+- **Sidebar order** — Overview → Activity → Sessions → Tasks → Projects → Schedules → Agents → Skills → Models → Analytics → Cost → Memory → Docs → Security → Settings
+- **Sessions page** — sessionId truncated to 8 characters in the table; full ID visible on hover
+- **Schedules** — agent dropdown shows name only (removed redundant ID in parentheses)
+- **Tauri window** — when attaching to an existing server (port already in use, e.g. LaunchAgent running), Tauri now navigates to `/` (login page) instead of the auto-auth URL; auto-login only applies to server processes started by Tauri itself
+
+---
+
 ## [0.5.2] — 2026-03-22
 
 ### Fixed

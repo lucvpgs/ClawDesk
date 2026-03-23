@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { homedir } from "os";
 
-const OPENCLAW_JSON = path.join(process.env.HOME!, ".openclaw", "openclaw.json");
-const UPDATE_CHECK  = path.join(process.env.HOME!, ".openclaw", "update-check.json");
+const OPENCLAW_JSON = path.join(homedir(), ".openclaw", "openclaw.json");
+const UPDATE_CHECK  = path.join(homedir(), ".openclaw", "update-check.json");
 
 function getClawdeskVersion(): string {
   try {
@@ -62,7 +63,7 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json(
-      { openclawVersion: "unknown", clawdeskVersion: "1.0.0", updateAvailable: false },
+      { openclawVersion: "unknown", clawdeskVersion: getClawdeskVersion(), updateAvailable: false },
       { status: 200 } // soft fail — don't crash the sidebar
     );
   }

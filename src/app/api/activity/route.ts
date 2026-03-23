@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { activityEvents, runtimeSources } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or, isNull } from "drizzle-orm";
 
 export async function GET() {
   const db = getDb();
@@ -12,11 +12,16 @@ export async function GET() {
     .where(eq(runtimeSources.isDefault, true))
     .limit(1);
 
+  // Show events from the default runtime source OR local events (no runtimeSourceId)
+  // Task/project events are written locally without a runtimeSourceId — they must not be excluded.
   const events = sources[0]
     ? await db
         .select()
         .from(activityEvents)
-        .where(eq(activityEvents.runtimeSourceId, sources[0].id))
+        .where(or(
+          eq(activityEvents.runtimeSourceId, sources[0].id),
+          isNull(activityEvents.runtimeSourceId),
+        ))
         .orderBy(desc(activityEvents.occurredAt))
         .limit(100)
     : await db
@@ -25,6 +30,5 @@ export async function GET() {
         .orderBy(desc(activityEvents.occurredAt))
         .limit(100);
 
-  // rawJson is included so the detail panel can show full event payload
   return NextResponse.json({ events });
 }

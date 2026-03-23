@@ -4,9 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { requirePro } from "@/server/require-pro";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
-import { findOpenClawBinary } from "@/server/connector/openclaw-scan";
+import { cliRun } from "@/server/cli-run";
 import { getMergedRates, findRate, calcCost } from "@/server/cost-utils";
 
 interface RawSession {
@@ -25,15 +23,10 @@ function isoDate(ts: number): string {
 
 export async function GET() {
   const block = requirePro(); if (block) return block;
-  const bin = findOpenClawBinary() ?? "openclaw";
 
   let sessions: RawSession[] = [];
   try {
-    const out = execSync(`${bin} sessions --all-agents --json`, {
-      timeout: 10_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["sessions", "--all-agents", "--json"], { timeout: 10_000 });
     const data = JSON.parse(out);
     sessions = (data?.sessions ?? []).map((s: RawSession) => ({
       sessionId:    s.sessionId,

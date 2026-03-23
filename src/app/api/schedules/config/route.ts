@@ -30,7 +30,7 @@ export interface CronJobConfig {
   /** delivery.to — Discord channel ID, Telegram chat ID, E.164, etc. */
   deliveryTo?: string | null;
   /** Full delivery object (OpenClaw native format) */
-  delivery?: { mode: string; channel: string; to?: string; bestEffort?: boolean } | null;
+  delivery?: { mode: string; channel?: string; to?: string; bestEffort?: boolean } | null;
   tags?: string[];
 }
 

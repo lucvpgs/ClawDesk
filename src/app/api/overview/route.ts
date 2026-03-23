@@ -6,8 +6,7 @@ import {
   activityEvents, tasks,
 } from "@/db/schema";
 import { eq, desc, and, ne } from "drizzle-orm";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
+import { cliRun } from "@/server/cli-run";
 import fs from "fs";
 import path from "path";
 import { homedir } from "os";
@@ -17,7 +16,16 @@ const HOME           = homedir();
 const OPENCLAW_JSON  = path.join(HOME, ".openclaw", "openclaw.json");
 const JOBS_JSON      = path.join(HOME, ".openclaw", "cron", "jobs.json");
 const MEMORY_DIR     = path.join(HOME, ".openclaw", "workspace", "memory");
-const GATEWAY_URL    = "http://localhost:18789";
+
+function gatewayUrl(): string {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(OPENCLAW_JSON, "utf8"));
+    const port = cfg?.gateway?.port ?? 18789;
+    return `http://localhost:${port}`;
+  } catch {
+    return "http://localhost:18789";
+  }
+}
 
 function todayStr() {
   const d = new Date();
@@ -35,11 +43,7 @@ function todayStr() {
 async function pingGateway(): Promise<{ alive: boolean; version?: string }> {
   // 1. CLI (most reliable — local process, no networking)
   try {
-    const out = execSync("openclaw status --json", {
-      timeout: 5_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["status", "--json"], { timeout: 5_000 });
     const json = JSON.parse(out);
     if (json?.runtimeVersion || json?.heartbeat) {
       return { alive: true, version: json.runtimeVersion ?? undefined };
@@ -49,7 +53,7 @@ async function pingGateway(): Promise<{ alive: boolean; version?: string }> {
   // 2. HTTP with generous timeout
   async function httpPing(): Promise<{ alive: boolean; version?: string }> {
     try {
-      const res = await fetch(`${GATEWAY_URL}/health`, { signal: AbortSignal.timeout(4_000) });
+      const res = await fetch(`${gatewayUrl()}/health`, { signal: AbortSignal.timeout(4_000) });
       if (!res.ok) return { alive: false };
       const json = await res.json();
       return { alive: true, version: json.version ?? undefined };

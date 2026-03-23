@@ -12,8 +12,7 @@ import { runtimeCronJobs, runtimeSources, activityEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { generateId } from "@/lib/utils";
 import { normalizeCronJob } from "@/lib/cron-utils";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
+import { cliRun } from "@/server/cli-run";
 
 const CRON_FILE = path.join(homedir(), ".openclaw", "cron", "jobs.json");
 
@@ -98,11 +97,7 @@ export async function POST(req: NextRequest) {
 
   // Trigger directly via CLI — no runtime source needed
   try {
-    const out = execSync(`openclaw cron run ${jobId}`, {
-      timeout: 10_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["cron", "run", jobId], { timeout: 10_000 });
     const result = JSON.parse(out);
 
     // Best-effort activity log (only if runtime DB is configured)

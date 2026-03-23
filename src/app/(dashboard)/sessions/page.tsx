@@ -201,7 +201,7 @@ function SessionPanel({ session, onClose }: { session: SessionMeta; onClose: () 
                 <span className="text-[9px] px-1.5 py-0.5 bg-zinc-800 text-zinc-500 rounded">{session.kind}</span>
               )}
             </div>
-            <div className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">{session.sessionId}</div>
+            <div className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate" title={session.sessionId}>{session.sessionId.slice(0, 8)}…</div>
           </div>
           <button
             onClick={handleCopy}
@@ -411,8 +411,8 @@ export default function SessionsPage() {
 
                     {/* Session ID */}
                     <td className="px-4 py-3">
-                      <div className="font-mono text-[10px] text-zinc-500 truncate max-w-[120px]">
-                        {session.sessionId}
+                      <div className="font-mono text-[10px] text-zinc-500 truncate max-w-[120px]" title={session.sessionId}>
+                        {session.sessionId.slice(0, 8)}…
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
                         {session.abortedLastRun && (

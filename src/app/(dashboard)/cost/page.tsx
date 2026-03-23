@@ -494,7 +494,7 @@ export default function CostPage() {
   const byDay    = data?.byDay    ?? [];
 
   return (
-    <ProGate feature="Cost Tracker">
+    <ProGate feature="Cost Tracker" blur>
     <div className="max-w-5xl mx-auto space-y-5">
       {showRates && <RatesModal onClose={() => setShowRates(false)} />}
 

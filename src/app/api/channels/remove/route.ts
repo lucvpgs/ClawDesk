@@ -3,8 +3,7 @@
  * Removes a channel via `openclaw channels remove --delete`.
  */
 import { NextResponse } from "next/server";
-import { execSync } from "child_process";
-import { cliEnv } from "@/server/cli-env";
+import { cliRun } from "@/server/cli-run";
 
 export async function DELETE(req: Request) {
   const body = await req.json() as { channel: string };
@@ -15,11 +14,7 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    const out = execSync(`openclaw channels remove --channel ${channel} --delete`, {
-      timeout: 10_000,
-      encoding: "utf-8",
-      env: cliEnv(),
-    });
+    const out = cliRun(["channels", "remove", "--channel", channel, "--delete"], { timeout: 10_000 });
     return NextResponse.json({ ok: true, output: out.trim() });
   } catch (e: unknown) {
     const msg = (e as { stderr?: string; message?: string }).stderr

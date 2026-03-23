@@ -658,7 +658,7 @@ function JobDetailPanel({
               onChange={(e) => setAgentId(e.target.value)}
             >
               {agents.map((a) => (
-                <option key={a.agentId} value={a.agentId}>{(a.name ?? a.agentId)} ({a.agentId})</option>
+                <option key={a.agentId} value={a.agentId}>{a.name ?? a.agentId}</option>
               ))}
             </select>
           </div>
@@ -845,7 +845,7 @@ function CreateScheduleModal({
               onChange={(e) => setAgentId(e.target.value)}
             >
               {agents.map((a) => (
-                <option key={a.agentId} value={a.agentId}>{(a.name ?? a.agentId)} ({a.agentId})</option>
+                <option key={a.agentId} value={a.agentId}>{a.name ?? a.agentId}</option>
               ))}
             </select>
           </div>

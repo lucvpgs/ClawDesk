@@ -1,5 +1,6 @@
 ---
 name: clawdesk
+version: "2026-03-23"
 description: >
   Operate the ClawDesk Mission Control application on behalf of the user.
   Use this skill whenever the user asks you to manage tasks, projects, schedules
