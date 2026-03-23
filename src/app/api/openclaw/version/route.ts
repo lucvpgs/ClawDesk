@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { homedir } from "os";
+import { cliRun } from "@/server/cli-run";
 
 const OPENCLAW_JSON = path.join(homedir(), ".openclaw", "openclaw.json");
 const UPDATE_CHECK  = path.join(homedir(), ".openclaw", "update-check.json");
@@ -15,16 +16,23 @@ function getClawdeskVersion(): string {
   }
 }
 
-/** Try to fetch the live running version from the gateway HTTP endpoint. */
-async function liveGatewayVersion(gatewayUrl: string): Promise<string | null> {
+/** Try CLI first (most reliable), then HTTP health endpoint. */
+async function liveOpenClawVersion(gatewayUrl: string): Promise<string | null> {
+  // 1. CLI — `openclaw status --json` returns { runtimeVersion, heartbeat }
   try {
-    // /health returns { version, ... }
+    const out  = cliRun(["status", "--json"], { timeout: 4_000 });
+    const json = JSON.parse(out) as Record<string, unknown>;
+    const v    = json?.runtimeVersion as string | undefined;
+    if (v) return v;
+  } catch { /* CLI unavailable — fall through */ }
+
+  // 2. HTTP /health fallback
+  try {
     const res = await fetch(`${gatewayUrl}/health`, {
       signal: AbortSignal.timeout(2_500),
     });
     if (!res.ok) return null;
     const json = await res.json() as Record<string, unknown>;
-    // Gateway returns version as `version` or `runtimeVersion`
     const v = (json.version ?? json.runtimeVersion) as string | undefined;
     return v ?? null;
   } catch {
@@ -39,13 +47,12 @@ export async function GET() {
       ? JSON.parse(fs.readFileSync(UPDATE_CHECK, "utf8"))
       : {};
 
-    // Config-file version (set when openclaw last started and wrote its config)
+    // Config-file version — only used as last resort (stale after updates)
     const configVersion: string = cfg?.meta?.lastTouchedVersion ?? "unknown";
 
-    // Live version from the running gateway (more accurate — reflects restarts & updates)
-    const port       = cfg?.gateway?.port ?? 18789;
-    const gatewayUrl = `http://localhost:${port}`;
-    const live       = await liveGatewayVersion(gatewayUrl);
+    // Live version: CLI → HTTP → config file
+    const port    = cfg?.gateway?.port ?? 18789;
+    const live    = await liveOpenClawVersion(`http://localhost:${port}`);
 
     // Prefer live version; fall back to config version
     const openclawVersion = live ?? configVersion;
