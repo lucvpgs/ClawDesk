@@ -36,7 +36,7 @@
     "resources": {
       "../.next/standalone-bundle": "server"
     },
-    "copyright": "\u00a9 2026 lucvpgs",
+    "copyright": "\u00a9 2026 ClawDesk",
     "category": "DeveloperTool",
     "shortDescription": "Mission Control for OpenClaw agents",
     "longDescription": "ClawDesk is a desktop dashboard for managing OpenClaw agents, tasks, schedules, channels, models, and integrations.",
