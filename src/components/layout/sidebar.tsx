@@ -101,7 +101,7 @@ export function Sidebar() {
   })();
 
   return (
-    <aside className="w-56 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col">
+    <aside className="w-56 h-screen sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col">
       {/* Logo */}
       <div className="h-12 flex items-center px-4 border-b border-zinc-800 gap-2">
         <Zap className="w-4 h-4 text-violet-400" />

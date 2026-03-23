@@ -5,6 +5,15 @@ import path from "path";
 const OPENCLAW_JSON = path.join(process.env.HOME!, ".openclaw", "openclaw.json");
 const UPDATE_CHECK  = path.join(process.env.HOME!, ".openclaw", "update-check.json");
 
+function getClawdeskVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
 /** Try to fetch the live running version from the gateway HTTP endpoint. */
 async function liveGatewayVersion(gatewayUrl: string): Promise<string | null> {
   try {
@@ -49,7 +58,7 @@ export async function GET() {
       lastCheckedAt,
       latestAvailable,
       updateAvailable,
-      clawdeskVersion: "1.0.0",
+      clawdeskVersion: getClawdeskVersion(),
     });
   } catch {
     return NextResponse.json(
