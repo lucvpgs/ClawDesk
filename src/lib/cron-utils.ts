@@ -66,9 +66,12 @@ export function normalizeCronJob(raw: any): NormalizedCronJob {
     ? new Date(raw.state.nextRunAtMs).toISOString()
     : null;
 
+  // v2026.3.22: "jobId" is now canonical; legacy "id" still accepted
+  const id: string = raw.jobId ?? raw.id;
+
   return {
-    id:           raw.id,
-    name:         raw.name ?? raw.id,
+    id,
+    name:         raw.name ?? id,
     agentId,
     schedule,
     prompt,

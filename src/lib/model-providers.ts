@@ -100,9 +100,11 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     ],
     freeTextModel: false,
     presetModels: [
+      { id: "gpt-5.4",      name: "GPT-5.4",        contextWindow: 200000, maxTokens: 16384 },
+      { id: "gpt-5.4-mini", name: "GPT-5.4 Mini",  contextWindow: 200000, maxTokens: 16384, description: "Fast & cheap" },
+      { id: "gpt-5.4-nano", name: "GPT-5.4 Nano",  contextWindow: 128000, maxTokens: 8192,  description: "Fastest, lowest cost" },
       { id: "gpt-4o",       name: "GPT-4o",        contextWindow: 128000, maxTokens: 16384 },
       { id: "gpt-4o-mini",  name: "GPT-4o Mini",   contextWindow: 128000, maxTokens: 16384, description: "Fast & cheap" },
-      { id: "gpt-4-turbo",  name: "GPT-4 Turbo",   contextWindow: 128000, maxTokens: 4096 },
       { id: "o1",           name: "o1",             contextWindow: 200000, reasoning: true },
       { id: "o3-mini",      name: "o3-mini",        contextWindow: 200000, reasoning: true, description: "Fast reasoning" },
     ],
@@ -118,8 +120,10 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     fields: [],   // OAuth is pre-configured, no extra fields
     freeTextModel: false,
     presetModels: [
-      { id: "gpt-5.4",   name: "GPT-5.4",    contextWindow: 200000 },
-      { id: "gpt-4o",    name: "GPT-4o",      contextWindow: 128000 },
+      { id: "gpt-5.4",      name: "GPT-5.4",       contextWindow: 200000 },
+      { id: "gpt-5.4-mini", name: "GPT-5.4 Mini",  contextWindow: 200000, description: "Fast & cheap" },
+      { id: "gpt-5.4-nano", name: "GPT-5.4 Nano",  contextWindow: 128000, description: "Fastest" },
+      { id: "gpt-4o",       name: "GPT-4o",        contextWindow: 128000 },
     ],
     docsUrl: "https://docs.openclaw.ai/providers/openai-codex",
   },
