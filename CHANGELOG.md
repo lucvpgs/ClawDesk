@@ -4,6 +4,13 @@ All notable changes to ClawDesk are documented here.
 
 ---
 
+## [0.6.1] — 2026-03-24
+
+### Fixed
+- **Skill rewritten for SSRF compatibility** — the `clawdesk` skill no longer uses `web_fetch` to `localhost:3131` (blocked by OpenClaw SSRF policy for all agents including Discord); all operations now use `sqlite3` for task/project DB reads and writes, `openclaw cron` CLI for schedules, and `python3` file I/O for memory/journal; added `/usr/bin/sqlite3` to agent exec approvals
+
+---
+
 ## [0.6.0] — 2026-03-23
 
 ### Added
