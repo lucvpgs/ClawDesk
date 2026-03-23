@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { BudgetWatcher } from "@/components/BudgetWatcher";
+import { BackupScheduler } from "@/components/BackupScheduler";
 import { LicenseProvider } from "@/contexts/LicenseContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <LicenseProvider>
           <BudgetWatcher />
+          <BackupScheduler />
           {children}
         </LicenseProvider>
       </ThemeProvider>

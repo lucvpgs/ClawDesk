@@ -1572,6 +1572,200 @@ function msAgo(ms: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// ── AutoBackupCard ─────────────────────────────────────────────────────────────
+
+interface ScheduleConfig {
+  schedule: "daily" | "weekly" | "off";
+  folder: string;
+  lastBackupAt: string | null;
+}
+
+interface AutoBackupResult {
+  ok: boolean;
+  savedTo: string;
+  deletedOld: string[];
+}
+
+function relativeTime(isoString: string | null): string {
+  if (!isoString) return "Never";
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? "s" : ""} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
+}
+
+function AutoBackupCard() {
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery<ScheduleConfig>({
+    queryKey: ["backup-schedule"],
+    queryFn: () => fetch("/api/backup/schedule").then((r) => r.json()),
+  });
+
+  const [localSchedule, setLocalSchedule] = useState<"daily" | "weekly" | "off" | null>(null);
+  const [localFolder, setLocalFolder] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [runningNow, setRunningNow] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runSuccess, setRunSuccess] = useState<string | null>(null);
+
+  const schedule = localSchedule ?? data?.schedule ?? "off";
+  const folder = localFolder ?? data?.folder ?? "~/ClawDesk-Backups";
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/backup/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedule, folder }),
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      await qc.invalidateQueries({ queryKey: ["backup-schedule"] });
+      setLocalSchedule(null);
+      setLocalFolder(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRunNow() {
+    setRunningNow(true);
+    setRunError(null);
+    setRunSuccess(null);
+    try {
+      const res = await fetch("/api/backup/auto", { method: "POST" });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const result = (await res.json()) as AutoBackupResult;
+      setRunSuccess(result.savedTo);
+      await qc.invalidateQueries({ queryKey: ["backup-schedule"] });
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Backup failed");
+    } finally {
+      setRunningNow(false);
+    }
+  }
+
+  return (
+    <div className="border border-zinc-800 rounded-xl p-4 space-y-4 bg-zinc-900/40">
+      <div className="flex items-start gap-2">
+        <Clock className="w-4 h-4 text-zinc-400 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-xs font-medium text-zinc-200">Automatic Backups</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Schedule recurring backups saved directly to disk.
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Loading…
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Schedule + Folder row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500">Schedule</label>
+              <select
+                value={schedule}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "daily" || v === "weekly" || v === "off") {
+                    setLocalSchedule(v);
+                  }
+                }}
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              >
+                <option value="off">Off</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500">Backup Folder</label>
+              <input
+                type="text"
+                value={folder}
+                onChange={(e) => setLocalFolder(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                placeholder="~/ClawDesk-Backups"
+              />
+            </div>
+          </div>
+
+          {/* Last backup + actions row */}
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-zinc-500">
+              Last backup:{" "}
+              <span className="text-zinc-300">
+                {relativeTime(data?.lastBackupAt ?? null)}
+              </span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRunNow}
+                disabled={runningNow}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg transition-colors"
+              >
+                {runningNow ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Archive className="w-3.5 h-3.5" />
+                )}
+                {runningNow ? "Running…" : "Run now"}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* Feedback */}
+          {saveError && (
+            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+              {saveError}
+            </div>
+          )}
+          {runError && (
+            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+              {runError}
+            </div>
+          )}
+          {runSuccess && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/20 border border-emerald-800/40 rounded-lg px-3 py-2">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Saved to {runSuccess}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── BackupTab ──────────────────────────────────────────────────────────────────
 function BackupTab() {
   return (
@@ -1698,6 +1892,9 @@ function BackupTabContent() {
           </div>
         )}
       </div>
+
+      {/* Auto backup card */}
+      <AutoBackupCard />
 
       {/* Import card */}
       <div className="border border-zinc-800 rounded-xl p-4 space-y-3 bg-zinc-900/40">
