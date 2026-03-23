@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { requirePro } from "@/server/require-pro";
 import { homedir } from "os";
 import path from "path";
 
@@ -57,6 +58,7 @@ function getBackupConfig(data: ClawdeskJson): BackupConfig {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const block = requirePro(); if (block) return block;
   const data = readClawdeskJson();
   const config = getBackupConfig(data);
   return NextResponse.json({ schedule: config.schedule, folder: config.folder, lastBackupAt: config.lastBackupAt });
@@ -68,6 +70,7 @@ interface PatchBody {
 }
 
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const block = requirePro(); if (block) return block;
   let body: PatchBody;
   try {
     body = (await req.json()) as PatchBody;

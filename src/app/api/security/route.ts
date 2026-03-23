@@ -3,6 +3,7 @@
  */
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
+import { requirePro } from "@/server/require-pro";
 import { homedir } from "os";
 import path from "path";
 
@@ -19,6 +20,7 @@ interface SecurityCheck {
 }
 
 export async function GET() {
+  const block = requirePro(); if (block) return block;
   let config: Record<string, unknown> = {};
   let configLoaded = false;
 

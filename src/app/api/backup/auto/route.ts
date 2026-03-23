@@ -4,6 +4,7 @@
  * Keeps only the last 5 backups in the folder.
  */
 import { NextResponse } from "next/server";
+import { requirePro } from "@/server/require-pro";
 import {
   existsSync,
   readFileSync,
@@ -154,6 +155,7 @@ function expandTilde(folderPath: string): string {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(): Promise<NextResponse> {
+  const block = requirePro(); if (block) return block;
   const clawdeskData = readClawdeskJson();
   const backupCfg = clawdeskData.backup ?? {};
   const rawFolder =

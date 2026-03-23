@@ -92,6 +92,12 @@ export function useLicense(): UseLicense {
       storeKey(raw);
       setStoredKey(raw.trim().toUpperCase());
       setState("valid");
+      // Persist to disk so API routes can enforce Pro server-side
+      fetch("/api/license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: raw }),
+      }).catch(() => { /* best-effort */ });
     } else {
       setState("invalid");
     }
@@ -102,6 +108,12 @@ export function useLicense(): UseLicense {
     removeKey();
     setStoredKey(null);
     setState("unknown");
+    // Remove from disk
+    fetch("/api/license", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deactivate" }),
+    }).catch(() => { /* best-effort */ });
   }, []);
 
   return {

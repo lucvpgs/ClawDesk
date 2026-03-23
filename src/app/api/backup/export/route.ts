@@ -3,6 +3,7 @@
  * Streams a JSON bundle containing all OpenClaw + ClawDesk config files.
  */
 import { NextResponse } from "next/server";
+import { requirePro } from "@/server/require-pro";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { homedir } from "os";
 import path from "path";
@@ -48,6 +49,7 @@ function safeRead(filePath: string): string | undefined {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const block = requirePro(); if (block) return block;
   const dataDir = process.env.CLAWDESK_DATA_DIR ?? DEFAULT_DATA_DIR;
   const openclawJson = safeRead(path.join(OPENCLAW_DIR, "openclaw.json"));
   const clawdeskJson = safeRead(path.join(OPENCLAW_DIR, "clawdesk.json"));

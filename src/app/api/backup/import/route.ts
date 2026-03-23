@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { homedir } from "os";
+import { requirePro } from "@/server/require-pro";
 import path from "path";
 
 const OPENCLAW_DIR = path.join(homedir(), ".openclaw");
@@ -38,6 +39,7 @@ function ensureDir(dirPath: string): void {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const block = requirePro(); if (block) return block;
   let formData: FormData;
   try {
     formData = await req.formData();

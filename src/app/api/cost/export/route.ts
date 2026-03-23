@@ -3,6 +3,7 @@
  * Returns raw per-session cost data as a CSV file download.
  */
 import { NextResponse } from "next/server";
+import { requirePro } from "@/server/require-pro";
 import { execSync } from "child_process";
 import { cliEnv } from "@/server/cli-env";
 import { findOpenClawBinary } from "@/server/connector/openclaw-scan";
@@ -23,6 +24,7 @@ function isoDate(ts: number): string {
 }
 
 export async function GET() {
+  const block = requirePro(); if (block) return block;
   const bin = findOpenClawBinary() ?? "openclaw";
 
   let sessions: RawSession[] = [];
