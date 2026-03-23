@@ -1,48 +1,17 @@
 "use client";
 
 /**
- * Offline license key system for ClawDesk Pro
+ * Client-side license state management for ClawDesk Pro.
  *
- * Key format:  CLWD-AAAA-BBBB-CCCC
- *   AAAA-BBBB = 8 random hex chars (unique per key)
- *   CCCC      = first 4 chars of HMAC-SHA256(AAAA-BBBB, SECRET)
- *
- * The embedded SECRET makes the scheme offline-only.
- * Key sharing is acceptable at the $39 price point.
+ * Validation is intentionally server-side only (/api/license).
+ * The secret never appears in the client bundle.
  */
 
 import { useState, useEffect, useCallback } from "react";
 
-// Embedded secret — obfuscated enough for a $39 product
-const SECRET = "clwd-7f3a9b2e-pro-2026";
 const LS_KEY = "clawdesk:license";
 
 export type LicenseState = "unknown" | "valid" | "invalid";
-
-async function hmac4(payload: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  const hex = Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return hex.slice(0, 4).toUpperCase();
-}
-
-export async function validateKey(raw: string): Promise<boolean> {
-  const key = raw.trim().toUpperCase();
-  const match = key.match(/^CLWD-([A-Z0-9]{4}-[A-Z0-9]{4})-([A-Z0-9]{4})$/);
-  if (!match) return false;
-  const [, payload, checksum] = match;
-  const expected = await hmac4(payload);
-  return expected === checksum;
-}
 
 /** Read persisted key from localStorage (null if none) */
 export function getStoredKey(): string | null {
@@ -50,18 +19,17 @@ export function getStoredKey(): string | null {
   return localStorage.getItem(LS_KEY);
 }
 
-/** Persist key to localStorage */
-export function storeKey(key: string) {
+/** Persist key to localStorage (display only — not authoritative) */
+function storeKey(key: string) {
   localStorage.setItem(LS_KEY, key.trim().toUpperCase());
 }
 
 /** Remove key from localStorage */
-export function removeKey() {
+function removeKey() {
   localStorage.removeItem(LS_KEY);
 }
 
-// ────────────────────────────────────────────────────────────
-// React hook
+// ── React hook ────────────────────────────────────────────────────────────────
 
 export interface UseLicense {
   isPro: boolean;
@@ -75,45 +43,61 @@ export function useLicense(): UseLicense {
   const [state, setState] = useState<LicenseState>("unknown");
   const [storedKey, setStoredKey] = useState<string | null>(null);
 
-  // Validate on mount
+  // On mount: check server-side status (authoritative)
   useEffect(() => {
-    const k = getStoredKey();
-    setStoredKey(k);
-    if (!k) {
-      setState("unknown");
-      return;
-    }
-    validateKey(k).then((ok) => setState(ok ? "valid" : "invalid"));
+    fetch("/api/license")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.isPro && data.key) {
+          storeKey(data.key);
+          setStoredKey(data.key);
+          setState("valid");
+        } else {
+          // Server says not Pro — clear any stale localStorage
+          removeKey();
+          setStoredKey(null);
+          setState("unknown");
+        }
+      })
+      .catch(() => {
+        // Fallback: use localStorage if server unreachable (app starting up)
+        const k = getStoredKey();
+        setStoredKey(k);
+        setState(k ? "valid" : "unknown");
+      });
   }, []);
 
   const activate = useCallback(async (raw: string): Promise<boolean> => {
-    const ok = await validateKey(raw);
-    if (ok) {
-      storeKey(raw);
-      setStoredKey(raw.trim().toUpperCase());
-      setState("valid");
-      // Persist to disk so API routes can enforce Pro server-side
-      fetch("/api/license", {
+    try {
+      const res = await fetch("/api/license", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: raw }),
-      }).catch(() => { /* best-effort */ });
-    } else {
-      setState("invalid");
-    }
-    return ok;
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const normalized = raw.trim().toUpperCase();
+        storeKey(normalized);
+        setStoredKey(normalized);
+        setState("valid");
+        return true;
+      }
+    } catch { /* network error */ }
+    setState("invalid");
+    return false;
   }, []);
 
-  const deactivate = useCallback(() => {
+  const deactivate = useCallback(async () => {
     removeKey();
     setStoredKey(null);
     setState("unknown");
-    // Remove from disk
-    fetch("/api/license", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "deactivate" }),
-    }).catch(() => { /* best-effort */ });
+    try {
+      await fetch("/api/license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deactivate" }),
+      });
+    } catch { /* best-effort */ }
   }, []);
 
   return {
