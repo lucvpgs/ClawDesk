@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Job id "${id}" already exists` }, { status: 409 });
     }
 
-    // Resolve channel type — default to "discord" when a destination is provided
-    const channelType = (outputTarget ?? (deliveryTo ? "discord" : null));
+    // Resolve channel type — use explicit outputTarget only; no default assumed
+    const channelType = outputTarget ?? null;
 
     const job: CronJobConfig = {
       id,
@@ -96,9 +96,9 @@ export async function POST(req: NextRequest) {
       // Write delivery object in OpenClaw native format so the gateway picks it up
       ...(deliveryTo ? {
         delivery: {
-          mode:    "announce",
-          channel: channelType ?? "discord",
-          to:      deliveryTo.trim(),
+          mode: "announce",
+          ...(channelType ? { channel: channelType } : {}),
+          to:   deliveryTo.trim(),
         },
       } : {}),
     };

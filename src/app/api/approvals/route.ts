@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import path from "path";
@@ -29,6 +29,7 @@ function readApprovals(): ApprovalsFile {
 }
 
 function writeApprovals(data: ApprovalsFile) {
+  mkdirSync(path.dirname(APPROVALS_PATH), { recursive: true });
   writeFileSync(APPROVALS_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 

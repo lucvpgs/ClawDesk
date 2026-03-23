@@ -3,7 +3,7 @@
  * PATCH /api/backup/schedule — saves schedule config (merges into clawdesk.json)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 
@@ -40,6 +40,7 @@ function readClawdeskJson(): ClawdeskJson {
 }
 
 function writeClawdeskJson(data: ClawdeskJson): void {
+  mkdirSync(OPENCLAW_DIR, { recursive: true });
   writeFileSync(CLAWDESK_JSON, JSON.stringify(data, null, 2), "utf-8");
 }
 

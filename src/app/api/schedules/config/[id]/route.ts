@@ -57,7 +57,7 @@ export async function PATCH(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw = job as any;
       if (body.deliveryTo) {
-        if (!raw.delivery) raw.delivery = { mode: "announce", channel: job.outputTarget ?? "discord" };
+        if (!raw.delivery) raw.delivery = { mode: "announce", ...(job.outputTarget ? { channel: job.outputTarget } : {}) };
         raw.delivery.to = body.deliveryTo.trim();
       } else {
         // Clearing the destination — remove delivery.to but keep rest of delivery object

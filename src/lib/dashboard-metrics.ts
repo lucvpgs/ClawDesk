@@ -51,7 +51,7 @@ export const METRICS: MetricDef[] = [
       const alive = data.gateway.alive || failCount < 2;
       return {
         value: data.gateway.alive ? "Live" : failCount < 2 ? "Checking…" : "Offline",
-        sub: data.gateway.version ?? "localhost:18789",
+        sub: data.gateway.version ?? "—",
         valueClass: data.gateway.alive ? "text-emerald-400" : failCount < 2 ? "text-zinc-500" : "text-red-400",
         href: "/system",
       };

@@ -152,7 +152,7 @@ export default function MemoryPage() {
         <div>
           <h1 className="text-base font-semibold text-zinc-100">Memory</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Icarus daily journal — {entries.length} entr{entries.length !== 1 ? "ies" : "y"}
+            Agent daily journal — {entries.length} entr{entries.length !== 1 ? "ies" : "y"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -183,7 +183,7 @@ export default function MemoryPage() {
             <div className="bg-zinc-900 border border-zinc-800 border-dashed rounded-lg py-10 text-center">
               <BookOpen className="w-6 h-6 text-zinc-700 mx-auto mb-2" />
               <p className="text-xs text-zinc-500">No journal entries yet</p>
-              <p className="text-[10px] text-zinc-700 mt-1">Icarus will write here daily</p>
+              <p className="text-[10px] text-zinc-700 mt-1">Your agent will write here daily</p>
             </div>
           ) : (
             entries.map((e) => (

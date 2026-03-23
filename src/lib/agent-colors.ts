@@ -83,18 +83,18 @@ export function agentInitial(agentId: string | null | undefined): string {
   return agentId.charAt(0).toUpperCase();
 }
 
-/** Maps known agent IDs to display names */
-const AGENT_NAMES: Record<string, string> = {
-  "main":         "Icarus",
-  "scout":        "Scout",
-  "builder-lite": "Builder Lite",
-  "meridian":     "Meridian",
-  "test":         "Test",
-};
-
-export function agentDisplayName(agentId: string | null | undefined): string {
+/** Returns a human-readable display name for an agent ID.
+ *  Uses the actual name from the API when available (RuntimeAgent.name).
+ *  Falls back to showing the raw agentId so no developer names are assumed.
+ */
+export function agentDisplayName(agentId: string | null | undefined, name?: string | null): string {
   if (!agentId) return "Unassigned";
-  return AGENT_NAMES[agentId] ?? agentId;
+  return name ?? agentId;
 }
 
-export const KNOWN_AGENTS = Object.entries(AGENT_NAMES).map(([id, name]) => ({ id, name }));
+/** Empty — agents are fetched dynamically from /api/agents.
+ *  KNOWN_AGENTS is kept as a typed export so pages compile without changes;
+ *  both tasks/page.tsx and schedules/page.tsx prefer agentsData from the API
+ *  and fall back to this array only when the API returns nothing.
+ */
+export const KNOWN_AGENTS: { id: string; name: string }[] = [];

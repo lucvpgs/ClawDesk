@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, Search, CheckCircle, XCircle, Loader2, ChevronRight, Bot, CalendarClock, Download } from "lucide-react";
+import { Zap, Search, CheckCircle, XCircle, Loader2, ChevronRight, Bot, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScanResult } from "@/types";
 
@@ -45,21 +45,25 @@ export default function OnboardingPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Check skill status when "next" step is shown
+  // Auto-install skill when "next" step is shown
   useEffect(() => {
     if (step !== "next") return;
-    setSkillState("checking");
-    fetch("/api/skill/status")
+    setSkillState("installing");
+    fetch("/api/skill/install", { method: "POST" })
       .then((r) => r.json())
       .then((data) => {
-        if (data.fullyInstalled) {
-          setSkillAgentName(data.agentsWithSkill?.[0] ?? null);
-          setSkillState("already");
+        if (data.ok) {
+          setSkillAgentName(data.agentName ?? null);
+          setSkillState("done");
         } else {
-          setSkillState("idle");
+          setSkillError(data.error ?? "Install failed");
+          setSkillState("error");
         }
       })
-      .catch(() => setSkillState("idle"));
+      .catch((e) => {
+        setSkillError(String(e));
+        setSkillState("error");
+      });
   }, [step]);
 
   async function connect() {
@@ -281,23 +285,8 @@ export default function OnboardingPage() {
                   Lets your agent manage tasks, schedules and models directly from chat.
                 </p>
 
-                {/* Idle / checking */}
-                {(skillState === "idle" || skillState === "checking") && (
-                  <button
-                    onClick={installSkill}
-                    disabled={skillState === "checking"}
-                    className="w-full px-3 py-2 text-xs font-medium bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-md transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    {skillState === "checking" ? (
-                      <><Loader2 className="w-3 h-3 animate-spin" /> Checking...</>
-                    ) : (
-                      <><Download className="w-3 h-3" /> Install skill</>
-                    )}
-                  </button>
-                )}
-
-                {/* Installing */}
-                {skillState === "installing" && (
+                {/* Installing (auto) */}
+                {(skillState === "idle" || skillState === "installing") && (
                   <div className="flex items-center gap-2 text-[11px] text-zinc-400">
                     <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
                     Installing skill...
@@ -305,11 +294,11 @@ export default function OnboardingPage() {
                 )}
 
                 {/* Done */}
-                {(skillState === "done" || skillState === "already") && (
+                {skillState === "done" && (
                   <div className="flex items-start gap-2">
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                     <div className="text-[11px] text-emerald-400">
-                      {skillState === "already" ? "Already installed" : "Skill installed"}
+                      Skill installed
                       {skillAgentName && (
                         <span className="text-zinc-500"> · enabled for <span className="text-zinc-300">{skillAgentName}</span></span>
                       )}
@@ -317,7 +306,7 @@ export default function OnboardingPage() {
                   </div>
                 )}
 
-                {/* Error */}
+                {/* Error — show retry button */}
                 {skillState === "error" && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-[11px] text-red-400">
