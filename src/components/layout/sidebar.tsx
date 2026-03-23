@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   DollarSign,
+  BarChart2,
   Bot,
   CheckSquare,
   FolderKanban,
@@ -40,6 +41,7 @@ const STORAGE_KEY = "clawdesk:lastSeenOpenclawVersion";
 const navItems = [
   { label: "Overview",  href: "/overview",  icon: LayoutDashboard },
   { label: "Cost",      href: "/cost",      icon: DollarSign      },
+  { label: "Analytics", href: "/analytics", icon: BarChart2       },
   { label: "Agents",    href: "/agents",    icon: Bot             },
   { label: "Sessions",  href: "/sessions",  icon: MessageSquare   },
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare     },

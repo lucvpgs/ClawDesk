@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DollarSign, TrendingUp, Calendar, Zap, RefreshCw,
-  Settings2, ChevronUp, ChevronDown, X, Save, Info,
+  Settings2, ChevronUp, ChevronDown, X, Save, Info, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentAccent, agentDisplayName } from "@/lib/agent-colors";
@@ -77,6 +77,246 @@ function fmtTokens(n: number): string {
 
 function modelShort(model: string): string {
   return model.split("/").pop() ?? model;
+}
+
+// ── Export CSV ─────────────────────────────────────────────────────────────────
+function downloadCSV(data: CostData) {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows: string[] = [];
+
+  // Section 1: Daily breakdown
+  rows.push("Daily Breakdown (Last 30 days)");
+  rows.push("Date,Input Tokens,Output Tokens,Total Tokens,Cost ($)");
+  for (const d of data.byDay) {
+    const total = d.inputTokens + d.outputTokens;
+    rows.push(`${d.date},${d.inputTokens},${d.outputTokens},${total},${d.cost.toFixed(6)}`);
+  }
+
+  rows.push("");
+
+  // Section 2: By Agent
+  rows.push("By Agent");
+  rows.push("Agent ID,Input Tokens,Output Tokens,Total Tokens,Cost ($)");
+  for (const a of data.byAgent) {
+    const total = a.inputTokens + a.outputTokens;
+    rows.push(`${a.agentId},${a.inputTokens},${a.outputTokens},${total},${a.cost.toFixed(6)}`);
+  }
+
+  rows.push("");
+
+  // Section 3: By Model
+  rows.push("By Model");
+  rows.push("Model,Input Tokens,Output Tokens,Total Tokens,Sessions,Cost ($)");
+  for (const m of data.byModel) {
+    const total = m.inputTokens + m.outputTokens;
+    rows.push(`${m.model},${m.inputTokens},${m.outputTokens},${total},${m.sessions},${m.cost.toFixed(6)}`);
+  }
+
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `clawdesk-cost-${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Token Analytics Chart ──────────────────────────────────────────────────────
+function TokenChart({ days, byAgent }: { days: DayCost[]; byAgent: AgentCost[] }) {
+  const [view, setView] = useState<"cost" | "tokens">("cost");
+  const [tooltip, setTooltip] = useState<{ idx: number; x: number; y: number } | null>(null);
+
+  const activeAgents = byAgent.filter((a) => a.inputTokens + a.outputTokens > 0);
+
+  // Compute max values for scaling
+  const maxCost = Math.max(...days.map((d) => d.cost), 0.0001);
+  const maxTokens = Math.max(...days.map((d) => d.inputTokens + d.outputTokens), 1);
+
+  const hoveredDay = tooltip !== null ? days[tooltip.idx] : null;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 space-y-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-600">Last 30 days</span>
+        <div className="flex items-center gap-2">
+          {/* Pill toggle */}
+          <div className="flex items-center bg-zinc-800 border border-zinc-700 rounded-lg p-0.5 text-[10px]">
+            <button
+              onClick={() => setView("cost")}
+              className={cn(
+                "px-2.5 py-1 rounded-md transition-colors font-medium",
+                view === "cost"
+                  ? "bg-zinc-700 text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              $ Cost
+            </button>
+            <button
+              onClick={() => setView("tokens")}
+              className={cn(
+                "px-2.5 py-1 rounded-md transition-colors font-medium",
+                view === "tokens"
+                  ? "bg-zinc-700 text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              # Tokens
+            </button>
+          </div>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {view === "cost"
+              ? fmt$(days.reduce((s, d) => s + d.cost, 0))
+              : fmtTokens(days.reduce((s, d) => s + d.inputTokens + d.outputTokens, 0)) + " total"}
+          </span>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="relative">
+        <div className="w-full h-32 flex items-end gap-px">
+          {days.map((d, i) => {
+            const isToday = i === days.length - 1;
+
+            if (view === "cost") {
+              const pct = (d.cost / maxCost) * 100;
+              return (
+                <div
+                  key={d.date}
+                  className="flex-1 flex flex-col justify-end group relative cursor-default"
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const containerRect = e.currentTarget.closest(".relative")!.getBoundingClientRect();
+                    setTooltip({ idx: i, x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top });
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                >
+                  <div
+                    className={cn(
+                      "rounded-sm transition-all",
+                      isToday ? "bg-violet-500" : "bg-zinc-700 group-hover:bg-zinc-500"
+                    )}
+                    style={{ height: `${Math.max(pct, 2)}%` }}
+                  />
+                </div>
+              );
+            } else {
+              const totalTokens = d.inputTokens + d.outputTokens;
+              const totalPct = (totalTokens / maxTokens) * 100;
+              const inputPct = totalTokens > 0 ? (d.inputTokens / totalTokens) * 100 : 50;
+              const outputPct = 100 - inputPct;
+              return (
+                <div
+                  key={d.date}
+                  className="flex-1 flex flex-col justify-end group relative cursor-default"
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const containerRect = e.currentTarget.closest(".relative")!.getBoundingClientRect();
+                    setTooltip({ idx: i, x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top });
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                >
+                  <div
+                    className="flex flex-col justify-end overflow-hidden rounded-sm group-hover:opacity-90 transition-opacity"
+                    style={{ height: `${Math.max(totalPct, 2)}%` }}
+                  >
+                    {/* output tokens — darker (top of stack) */}
+                    <div className="bg-zinc-400" style={{ height: `${outputPct}%` }} />
+                    {/* input tokens — lighter (bottom of stack) */}
+                    <div className="bg-zinc-600" style={{ height: `${inputPct}%` }} />
+                  </div>
+                </div>
+              );
+            }
+          })}
+        </div>
+
+        {/* Tooltip */}
+        {tooltip !== null && hoveredDay && (
+          <div
+            className="absolute z-10 pointer-events-none bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-2 text-[10px] shadow-xl whitespace-nowrap"
+            style={{
+              left: Math.min(Math.max(tooltip.x - 60, 0), 999),
+              top: Math.max(tooltip.y - 80, 0),
+              transform: "translateX(0)",
+            }}
+          >
+            <div className="text-zinc-400 font-medium mb-1">{hoveredDay.date}</div>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-500">Cost</span>
+                <span className="text-zinc-200 font-mono">{fmt$(hoveredDay.cost)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-500">Input</span>
+                <span className="text-zinc-200 font-mono">{fmtTokens(hoveredDay.inputTokens)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-500">Output</span>
+                <span className="text-zinc-200 font-mono">{fmtTokens(hoveredDay.outputTokens)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-zinc-700 mt-0.5 pt-0.5">
+                <span className="text-zinc-500">Total</span>
+                <span className="text-zinc-200 font-mono">{fmtTokens(hoveredDay.inputTokens + hoveredDay.outputTokens)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Date labels */}
+      <div className="flex justify-between text-[9px] text-zinc-700">
+        <span>{days[0]?.date}</span>
+        <span>today</span>
+      </div>
+
+      {/* Legend (tokens view only) */}
+      {view === "tokens" && (
+        <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-zinc-800">
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <div className="w-2.5 h-2.5 rounded-sm bg-zinc-600 shrink-0" />
+            Input tokens
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <div className="w-2.5 h-2.5 rounded-sm bg-zinc-400 shrink-0" />
+            Output tokens
+          </div>
+          {activeAgents.length > 0 && (
+            <>
+              <div className="w-px h-3 bg-zinc-700 mx-1" />
+              {activeAgents.map((a) => {
+                const accent = agentAccent(a.agentId);
+                return (
+                  <div key={a.agentId} className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                    <div className={cn("w-2.5 h-2.5 rounded-sm shrink-0", accent.avatar)} />
+                    {agentDisplayName(a.agentId)}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Legend (cost view) — just agents */}
+      {view === "cost" && activeAgents.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-zinc-800">
+          {activeAgents.map((a) => {
+            const accent = agentAccent(a.agentId);
+            return (
+              <div key={a.agentId} className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                <div className={cn("w-2.5 h-2.5 rounded-sm shrink-0", accent.avatar)} />
+                {agentDisplayName(a.agentId)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Spend card ─────────────────────────────────────────────────────────────────
@@ -265,6 +505,15 @@ export default function CostPage() {
           <p className="text-xs text-zinc-500 mt-0.5">Token spend calculat din sesiunile tuturor agenților</p>
         </div>
         <div className="flex items-center gap-2">
+          {data && (
+            <button
+              onClick={() => downloadCSV(data)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-600 rounded-lg transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
+          )}
           <button
             onClick={() => setShowRates(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-600 rounded-lg transition-colors"
@@ -299,19 +548,9 @@ export default function CostPage() {
             />
           </div>
 
-          {/* Sparkline chart */}
+          {/* Token Analytics chart */}
           {byDay.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-600">Last 30 days</span>
-                <span className="text-[10px] text-zinc-600 font-mono">{fmt$(summary?.month ?? 0)} total</span>
-              </div>
-              <SparkBar days={byDay} />
-              <div className="flex justify-between text-[9px] text-zinc-700">
-                <span>{byDay[0]?.date}</span>
-                <span>today</span>
-              </div>
-            </div>
+            <TokenChart days={byDay} byAgent={byAgent} />
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
