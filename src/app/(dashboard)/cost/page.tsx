@@ -469,7 +469,7 @@ function RatesModal({ onClose }: { onClose: () => void }) {
         <div className="px-5 py-3 border-t border-zinc-800 shrink-0">
           <p className="text-[10px] text-zinc-600 flex items-center gap-1">
             <Info className="w-3 h-3" />
-            Overrides sunt salvate local în ~/.openclaw/clawdesk.json
+            Rate overrides are saved locally in ~/.openclaw/clawdesk.json
           </p>
         </div>
       </div>
@@ -502,7 +502,7 @@ export default function CostPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-zinc-100">Cost Tracker</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">Token spend calculat din sesiunile tuturor agenților</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Token spend calculated from all agent sessions</p>
         </div>
         <div className="flex items-center gap-2">
           {data && (

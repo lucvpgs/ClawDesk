@@ -606,15 +606,15 @@ function AgentDetailPanel({
                         />
                       </div>
                       <p className="text-[10px] text-zinc-600">
-                        ClawDesk îți trimite o notificare la 80% și 100% din bugetul zilnic.
-                        Setează 0 sau lasă gol pentru fără limită.
+                        ClawDesk sends a notification at 80% and 100% of the daily budget.
+                        Set 0 or leave empty for no limit.
                       </p>
                     </div>
                     {budgetPerDay && parseFloat(budgetPerDay) > 0 && (
                       <div className="flex items-center gap-2 p-3 bg-violet-900/10 border border-violet-800/30 rounded-lg">
                         <span className="text-[11px] text-violet-300">
-                          Alertă la <strong>${(parseFloat(budgetPerDay) * 0.8).toFixed(2)}</strong> (80%)
-                          și <strong>${parseFloat(budgetPerDay).toFixed(2)}</strong> (100%)
+                          Alert at <strong>${(parseFloat(budgetPerDay) * 0.8).toFixed(2)}</strong> (80%)
+                          and <strong>${parseFloat(budgetPerDay).toFixed(2)}</strong> (100%)
                         </span>
                       </div>
                     )}

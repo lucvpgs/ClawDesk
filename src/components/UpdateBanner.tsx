@@ -66,7 +66,7 @@ export function UpdateBanner() {
           ClawDesk {update.version} disponibil
         </p>
         <p className="text-[10px] text-zinc-500 truncate">
-          Versiunea curentă: {update.currentVersion}
+          Current version: {update.currentVersion}
         </p>
       </div>
 
@@ -76,7 +76,7 @@ export function UpdateBanner() {
         className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-60 transition-colors shrink-0"
       >
         {installing ? (
-          <><RefreshCw className="h-3 w-3 animate-spin" /> Se instalează…</>
+          <><RefreshCw className="h-3 w-3 animate-spin" /> Installing…</>
         ) : (
           "Update Now"
         )}

@@ -1,5 +1,9 @@
 /**
  * GET /api/security — reads openclaw.json and returns security health checks
+ *
+ * Score formula: only "ok" and "warn" checks count toward the score.
+ * "unknown" checks are informational and do not penalise the score.
+ * Score = (ok * 1 + warn * 0.5) / (ok + warn + fail) * 100
  */
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
@@ -59,40 +63,69 @@ export async function GET() {
   }
 
   // 2. Auth enabled
-  const authEnabled = get(config, "auth", "enabled");
-  const hasPassword = !!(get(config, "auth", "password") || get(config, "auth", "secret"));
-  checks.push({
-    id: "auth-enabled",
-    label: "Authentication enabled",
-    status: authEnabled === false ? "fail" : authEnabled === true && hasPassword ? "ok" : "warn",
-    detail: authEnabled === false
-      ? "auth.enabled is false — anyone who can reach the gateway can send commands"
-      : authEnabled === true && hasPassword
-        ? "Authentication is enabled with a password"
-        : "auth.enabled not explicitly set — default may vary by version",
-    fix: authEnabled === false
-      ? 'Set auth.enabled: true and a strong auth.password in openclaw.json'
-      : undefined,
-  });
+  // OpenClaw stores auth under gateway.auth.mode (token/none) or auth.enabled
+  const gatewayAuthMode = get(config, "gateway", "auth", "mode") as string | undefined;
+  const authEnabled     = get(config, "auth", "enabled");
+  const hasPassword     = !!(get(config, "auth", "password") || get(config, "auth", "secret"));
+
+  let authStatus: CheckStatus;
+  let authDetail: string;
+  let authFix: string | undefined;
+
+  if (gatewayAuthMode && gatewayAuthMode !== "none" && gatewayAuthMode !== "off") {
+    authStatus = "ok";
+    authDetail = `Authentication enabled (mode: ${gatewayAuthMode})`;
+  } else if (gatewayAuthMode === "none" || gatewayAuthMode === "off") {
+    authStatus = "fail";
+    authDetail = "Gateway auth is disabled — anyone who can reach the gateway can send commands";
+    authFix = 'Set gateway.auth.mode to "token" in openclaw.json';
+  } else if (authEnabled === true && hasPassword) {
+    authStatus = "ok";
+    authDetail = "Authentication is enabled with a password";
+  } else if (authEnabled === false) {
+    authStatus = "fail";
+    authDetail = "auth.enabled is false — anyone who can reach the gateway can send commands";
+    authFix = 'Set auth.enabled: true and a strong auth.password in openclaw.json';
+  } else {
+    authStatus = "warn";
+    authDetail = "Auth configuration not explicitly found — verify gateway.auth in openclaw.json";
+  }
+
+  checks.push({ id: "auth-enabled", label: "Authentication enabled", status: authStatus, detail: authDetail, fix: authFix });
 
   // 3. Gateway not bound to 0.0.0.0
-  const gatewayHost = get(config, "gateway", "host")
-    ?? get(config, "gateway", "bind")
+  const gatewayBind = get(config, "gateway", "bind")
+    ?? get(config, "gateway", "host")
     ?? get(config, "server", "host");
+  const gatewayMode = get(config, "gateway", "mode") as string | undefined;
+
+  const bindStr = gatewayBind != null ? String(gatewayBind) : null;
+  const isLoopback = bindStr != null && (
+    bindStr === "loopback" ||
+    bindStr.startsWith("127.") ||
+    bindStr === "localhost" ||
+    bindStr === "local"
+  );
+  const isPublic = bindStr === "0.0.0.0";
+  // "local" mode implies loopback even if bind is not set
+  const modeIsLocal = gatewayMode === "local" || gatewayMode === "loopback";
+
   checks.push({
     id: "gateway-binding",
     label: "Gateway not publicly exposed",
-    status: gatewayHost == null ? "unknown"
-      : String(gatewayHost) === "0.0.0.0" ? "fail"
-      : String(gatewayHost).startsWith("127.") || String(gatewayHost) === "localhost" ? "ok"
+    status: isPublic ? "fail"
+      : isLoopback || modeIsLocal ? "ok"
+      : bindStr == null ? "unknown"
       : "warn",
-    detail: gatewayHost == null
-      ? "Could not determine gateway binding — verify manually"
-      : String(gatewayHost) === "0.0.0.0"
-        ? `Gateway bound to 0.0.0.0 — accessible from any network interface`
-        : `Gateway bound to ${gatewayHost}`,
-    fix: String(gatewayHost) === "0.0.0.0"
-      ? 'Change gateway.host to "127.0.0.1" in openclaw.json unless remote access is intentional'
+    detail: isPublic
+      ? "Gateway bound to 0.0.0.0 — accessible from any network interface"
+      : isLoopback || modeIsLocal
+        ? `Gateway restricted to loopback${bindStr ? ` (${bindStr})` : ""}`
+        : bindStr == null
+          ? "Could not determine gateway binding — verify manually"
+          : `Gateway bound to ${bindStr}`,
+    fix: isPublic
+      ? 'Change gateway.bind to "loopback" in openclaw.json unless remote access is intentional'
       : undefined,
   });
 
@@ -109,14 +142,14 @@ export async function GET() {
       ? "Shell execution tools are disabled"
       : execEnabled === true
         ? "Shell execution tools are enabled — agents can run arbitrary commands"
-        : "Could not determine exec tool status — check tools.exec in openclaw.json",
+        : "Exec tool config not found — defaults apply (check tools.exec in openclaw.json)",
     fix: execEnabled === true
       ? "Consider setting tools.exec.enabled: false or restricting to specific commands if not needed"
       : undefined,
   });
 
   // 5. Number of agents configured
-  const agentList = get(config, "agents", "list");
+  const agentList  = get(config, "agents", "list");
   const agentCount = Array.isArray(agentList) ? agentList.length : 0;
   checks.push({
     id: "agent-count",
@@ -131,6 +164,7 @@ export async function GET() {
   const tlsEnabled = get(config, "tls", "enabled")
     ?? get(config, "server", "tls")
     ?? get(config, "https");
+  // TLS is optional for localhost-only setups — don't penalise unknown
   checks.push({
     id: "tls",
     label: "TLS / HTTPS",
@@ -139,14 +173,18 @@ export async function GET() {
       ? "TLS is enabled"
       : tlsEnabled === false
         ? "TLS is disabled — traffic between clients and gateway is unencrypted"
-        : "TLS configuration not found — HTTP only (acceptable for localhost use)",
+        : "TLS not configured — acceptable for localhost-only use",
     fix: tlsEnabled === false
       ? "Enable TLS if OpenClaw is accessible over a network"
       : undefined,
   });
 
-  const score = Math.round(
-    (checks.filter((c) => c.status === "ok").length / checks.length) * 100
+  // Score: ok=full, warn=half, fail=zero, unknown=excluded from calculation
+  const scorable = checks.filter((c) => c.status !== "unknown");
+  const score = scorable.length === 0 ? 100 : Math.round(
+    (scorable.filter((c) => c.status === "ok").length * 1 +
+     scorable.filter((c) => c.status === "warn").length * 0.5) /
+    scorable.length * 100
   );
 
   return NextResponse.json({ checks, score, configLoaded });

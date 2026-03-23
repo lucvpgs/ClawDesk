@@ -116,7 +116,7 @@ export default function SecurityPage() {
         <div>
           <h1 className="text-base font-semibold text-zinc-100">Security Health</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Verificare configurație OpenClaw pentru expuneri comune
+            OpenClaw configuration checks for common security exposures
           </p>
         </div>
         <button
@@ -159,8 +159,8 @@ export default function SecurityPage() {
 
           {/* Footer note */}
           <p className="text-[10px] text-zinc-700 text-center leading-relaxed">
-            Aceste verificări sunt bazate pe ~/.openclaw/openclaw.json.
-            Unele setări pot fi suprascrise de variabile de mediu sau flags CLI.
+            Checks are based on ~/.openclaw/openclaw.json.
+            Some settings may be overridden by environment variables or CLI flags.
           </p>
         </>
       )}
