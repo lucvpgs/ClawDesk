@@ -9,9 +9,11 @@ import {
   Shield, Terminal, Clock, Bot,
   MessageSquare, Search, Hash, Send, GitBranch, FileText, Layers, Webhook,
   ExternalLink, Eye, EyeOff, X, Save, Trash2, ChevronDown, ChevronUp, Loader2, FlaskConical,
+  Archive, Upload,
 } from "lucide-react";
 import { cn, timeAgo, statusDot, statusColor } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
+import { ProGate } from "@/components/ProGate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RuntimeSourceRow {
@@ -63,6 +65,7 @@ const TABS = [
   { key: "channels",     label: "Channels"        },
   { key: "approvals",    label: "Approvals"        },
   { key: "integrations", label: "Integrations"    },
+  { key: "backup",       label: "Backup & Restore" },
 ];
 
 // ── Page wrapper ──────────────────────────────────────────────────────────────
@@ -101,6 +104,7 @@ function SettingsContent() {
         {activeTab === "channels"     && <ChannelsTab />}
         {activeTab === "approvals"    && <ApprovalsTab />}
         {activeTab === "integrations" && <IntegrationsTab />}
+        {activeTab === "backup"       && <BackupTab />}
       </div>
     </div>
   );
@@ -1566,4 +1570,237 @@ function msAgo(ms: number): string {
   const h = Math.floor(m / 60);
   if (h < 24)  return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+// ── BackupTab ──────────────────────────────────────────────────────────────────
+function BackupTab() {
+  return (
+    <ProGate feature="Backup & Restore">
+      <BackupTabContent />
+    </ProGate>
+  );
+}
+
+interface RestoreResult {
+  ok: boolean;
+  restored: string[];
+  skipped: string[];
+  error?: string;
+}
+
+function BackupTabContent() {
+  // Export state
+  const [exporting, setExporting]   = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Import state
+  const [importFile, setImportFile]         = useState<File | null>(null);
+  const [importing, setImporting]           = useState(false);
+  const [importError, setImportError]       = useState<string | null>(null);
+  const [importResult, setImportResult]     = useState<RestoreResult | null>(null);
+  const [showConfirm, setShowConfirm]       = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch("/api/backup/export");
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : "clawdesk-backup.json";
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setImportFile(f);
+    setImportError(null);
+    setImportResult(null);
+    setShowConfirm(false);
+  }
+
+  function handleRestoreClick() {
+    if (!importFile) return;
+    setShowConfirm(true);
+  }
+
+  async function handleConfirmRestore() {
+    if (!importFile) return;
+    setShowConfirm(false);
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const form = new FormData();
+      form.append("file", importFile);
+      const res = await fetch("/api/backup/import", { method: "POST", body: form });
+      const data = await res.json() as RestoreResult;
+      if (!data.ok) throw new Error(data.error ?? "Restore failed");
+      setImportResult(data);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Section header */}
+      <div className="flex items-center gap-2">
+        <Archive className="w-4 h-4 text-zinc-400" />
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">Backup &amp; Restore</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Export or restore your OpenClaw and ClawDesk configuration.</p>
+        </div>
+      </div>
+
+      {/* Export card */}
+      <div className="border border-zinc-800 rounded-xl p-4 space-y-3 bg-zinc-900/40">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-zinc-200">Export Backup</p>
+            <p className="text-xs text-zinc-500">
+              Download a full backup of your OpenClaw agents, configs, and ClawDesk settings.
+            </p>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+          >
+            {exporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Archive className="w-3.5 h-3.5" />
+            )}
+            {exporting ? "Exporting…" : "Export Backup"}
+          </button>
+        </div>
+        {exportError && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+            {exportError}
+          </div>
+        )}
+      </div>
+
+      {/* Import card */}
+      <div className="border border-zinc-800 rounded-xl p-4 space-y-3 bg-zinc-900/40">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-zinc-200">Restore from Backup</p>
+          <p className="text-xs text-zinc-500">
+            Restore from a previous backup file. This will overwrite your current config.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label className="flex-1 flex items-center gap-2 px-3 py-2 border border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-zinc-500 transition-colors">
+            <Upload className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+            <span className="text-xs text-zinc-500 truncate">
+              {importFile ? importFile.name : "Choose .json backup file…"}
+            </span>
+            <input
+              type="file"
+              accept=".json"
+              className="sr-only"
+              onChange={handleFileChange}
+            />
+          </label>
+          <button
+            onClick={handleRestoreClick}
+            disabled={!importFile || importing}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg transition-colors"
+          >
+            {importing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Upload className="w-3.5 h-3.5" />
+            )}
+            {importing ? "Restoring…" : "Restore"}
+          </button>
+        </div>
+
+        {/* Confirmation warning */}
+        {showConfirm && (
+          <div className="space-y-3 border border-amber-800/50 bg-amber-950/20 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-300">
+                This will overwrite <span className="font-medium">openclaw.json</span>,{" "}
+                <span className="font-medium">clawdesk.json</span> and all agent configs.
+                Are you sure?
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmRestore}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors"
+              >
+                Yes, restore
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {importError && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+            {importError}
+          </div>
+        )}
+
+        {/* Success */}
+        {importResult?.ok && (
+          <div className="space-y-2 border border-emerald-800/50 bg-emerald-950/20 rounded-lg p-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <p className="text-xs text-emerald-300 font-medium">Restore complete</p>
+            </div>
+            {importResult.restored.length > 0 && (
+              <div>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Restored</p>
+                <ul className="space-y-0.5">
+                  {importResult.restored.map((f) => (
+                    <li key={f} className="text-xs text-zinc-300 font-mono">{f}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importResult.skipped.length > 0 && (
+              <div>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Skipped</p>
+                <ul className="space-y-0.5">
+                  {importResult.skipped.map((f) => (
+                    <li key={f} className="text-xs text-zinc-500 font-mono">{f}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
