@@ -1,10 +1,18 @@
 # ClawDesk — Mission Control
 
-> **Installing the ClawDesk skill?** Run this one command:
+> **Installing the ClawDesk skill?**
+>
+> **macOS / Linux** (bash):
 > ```bash
 > bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
 > ```
-> ⚠️ `openclaw skills install <github-url>` does **not** work — use the curl command above.
+>
+> **Windows** (PowerShell):
+> ```powershell
+> $d="$env:USERPROFILE\.openclaw\workspace\skills\clawdesk"; New-Item -ItemType Directory -Force -Path $d | Out-Null; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/SKILL.md" -OutFile "$d\SKILL.md"; Write-Host "✅ Installed"
+> ```
+>
+> ⚠️ `openclaw skills install <github-url>` does **not** work — use the commands above.
 
 ---
 

@@ -1,1 +1,5 @@
+# macOS / Linux
 bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
+
+# Windows (PowerShell)
+$d="$env:USERPROFILE\.openclaw\workspace\skills\clawdesk"; New-Item -ItemType Directory -Force -Path $d | Out-Null; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/SKILL.md" -OutFile "$d\SKILL.md"; Write-Host "Installed"

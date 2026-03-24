@@ -31,11 +31,11 @@ User (Discord / Telegram / Slack / etc.)
      ▼
   Your primary agent (you)
      │  uses
-     ├── /usr/bin/sqlite3           → ClawDesk DB (tasks, projects, activity)
-     ├── /opt/homebrew/bin/openclaw → schedules, agents, models, gateway
-     └── /usr/bin/python3 + files   → memory/journal (~/.openclaw/workspace/memory/)
+     ├── sqlite3              → ClawDesk DB (tasks, projects, activity)
+     ├── openclaw             → schedules, agents, models, gateway
+     └── python3 + files      → memory/journal (~/.openclaw/workspace/memory/)
 
-ClawDesk DB: ~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db
+ClawDesk DB path (auto-detected by OS — see DB path section below)
 OpenClaw config: ~/.openclaw/openclaw.json
 Cron jobs: ~/.openclaw/cron/jobs.json
 Memory files: ~/.openclaw/workspace/memory/YYYY-MM-DD.md
@@ -45,11 +45,23 @@ Memory files: ~/.openclaw/workspace/memory/YYYY-MM-DD.md
 
 ## DB path
 
+The DB location depends on the OS. Always detect it with python3:
+
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "
+import os, sys
+if sys.platform == 'darwin':
+    p = os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db')
+elif sys.platform == 'win32':
+    p = os.path.join(os.environ.get('APPDATA', ''), 'com.vpgs.clawdesk', 'clawdesk.db')
+else:
+    p = os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db')
+print(p)
+")
 ```
 
-Always quote the path. Use `-separator '|'` for parseable output or `-json` for structured results.
+Use this snippet at the top of every bash block that needs the DB. Always quote `"$DB"`.
+Use `-separator '|'` for parseable output or `-json` for structured results.
 
 ---
 
@@ -96,23 +108,30 @@ This gives you full context without asking the user to repeat themselves.
 Journal files are plain markdown at `~/.openclaw/workspace/memory/YYYY-MM-DD.md` — visible in ClawDesk → Memory page.
 
 ### Read today's journal
-```bash
-TODAY=$(date +%Y-%m-%d)
-cat ~/.openclaw/workspace/memory/$TODAY.md 2>/dev/null || echo "(no entry yet)"
+```python
+import os, datetime
+today = datetime.date.today().strftime("%Y-%m-%d")
+path = os.path.expanduser(f"~/.openclaw/workspace/memory/{today}.md")
+print(open(path).read() if os.path.exists(path) else "(no entry yet)")
 ```
 
 ### Read yesterday's journal
-```bash
-YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d yesterday +%Y-%m-%d)
-cat ~/.openclaw/workspace/memory/$YESTERDAY.md 2>/dev/null || echo "(no entry)"
+```python
+import os, datetime
+yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+path = os.path.expanduser(f"~/.openclaw/workspace/memory/{yesterday}.md")
+print(open(path).read() if os.path.exists(path) else "(no entry)")
 ```
 
 ### Create or overwrite today's entry
-```bash
-TODAY=$(date +%Y-%m-%d)
-mkdir -p ~/.openclaw/workspace/memory
-cat > ~/.openclaw/workspace/memory/$TODAY.md << 'EOF'
-# Journal — 2026-03-24
+```python
+import os, datetime
+today = datetime.date.today().strftime("%Y-%m-%d")
+mem_dir = os.path.expanduser("~/.openclaw/workspace/memory")
+os.makedirs(mem_dir, exist_ok=True)
+path = os.path.join(mem_dir, f"{today}.md")
+with open(path, "w") as f:
+    f.write(f"""# Journal — {today}
 
 ## Completed
 - [task completed — one line]
@@ -128,7 +147,7 @@ cat > ~/.openclaw/workspace/memory/$TODAY.md << 'EOF'
 
 ## Notes
 - [anything else]
-EOF
+""")
 ```
 
 ### Append to today's entry
@@ -137,7 +156,7 @@ import os, datetime
 today = datetime.date.today().strftime("%Y-%m-%d")
 path = os.path.expanduser(f"~/.openclaw/workspace/memory/{today}.md")
 with open(path, "a") as f:
-    f.write("\n## Notes\n- Something happened at 15:30\n")
+    f.write("\n## Notes\n- Something happened\n")
 ```
 
 ### When to write a journal entry
@@ -190,7 +209,7 @@ tasks(
 
 ### List all open tasks
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 -json "$DB" "
   SELECT t.id, t.title, t.status, t.priority, t.due_at,
          p.name AS project
@@ -205,16 +224,15 @@ sqlite3 -json "$DB" "
 
 ### List tasks by status
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 -json "$DB" "SELECT id, title, status, priority FROM tasks WHERE status='todo' ORDER BY created_at DESC LIMIT 20"
 ```
 
 ### Create a task
-Generate a UUID first, then INSERT:
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "
   INSERT INTO tasks (id, title, description, status, priority, created_at, updated_at)
   VALUES ('$ID', 'Task title here', 'Optional description', 'todo', 'medium', '$NOW', '$NOW')
@@ -224,11 +242,10 @@ echo "Created task: $ID"
 
 For tasks with a project:
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-# First find the project ID
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 PROJECT_ID=$(sqlite3 "$DB" "SELECT id FROM projects WHERE name LIKE '%ProjectName%' LIMIT 1")
 ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "
   INSERT INTO tasks (id, project_id, title, priority, status, created_at, updated_at)
   VALUES ('$ID', '$PROJECT_ID', 'Task title', 'high', 'todo', '$NOW', '$NOW')
@@ -237,34 +254,34 @@ sqlite3 "$DB" "
 
 ### Update task status
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "UPDATE tasks SET status='done', updated_at='$NOW' WHERE id='<task-id>'"
 ```
 
 ### Update task priority
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "UPDATE tasks SET priority='urgent', updated_at='$NOW' WHERE id='<task-id>'"
 ```
 
 ### Update task fields (general)
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "UPDATE tasks SET title='New title', description='New desc', updated_at='$NOW' WHERE id='<task-id>'"
 ```
 
 ### Delete a task
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 "$DB" "DELETE FROM tasks WHERE id='<task-id>'"
 ```
 
 ### Find task by title (fuzzy)
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 -json "$DB" "SELECT id, title, status, priority FROM tasks WHERE title LIKE '%keyword%'"
 ```
 
@@ -286,7 +303,7 @@ projects(
 
 ### List all active projects
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 -json "$DB" "
   SELECT p.id, p.name, p.description, p.status,
          COUNT(t.id) AS task_count,
@@ -301,9 +318,9 @@ sqlite3 -json "$DB" "
 
 ### Create a project
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "
   INSERT INTO projects (id, name, description, status, created_at, updated_at)
   VALUES ('$ID', 'Project Name', 'Description here', 'active', '$NOW', '$NOW')
@@ -313,15 +330,15 @@ echo "Created project: $ID"
 
 ### Update project
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "UPDATE projects SET name='New Name', updated_at='$NOW' WHERE id='<project-id>'"
 ```
 
 ### Archive a project
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "UPDATE projects SET status='archived', updated_at='$NOW' WHERE id='<project-id>'"
 ```
 
@@ -331,7 +348,7 @@ sqlite3 "$DB" "UPDATE projects SET status='archived', updated_at='$NOW' WHERE id
 
 ### Recent activity events
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 sqlite3 -json "$DB" "
   SELECT event_type, entity_type, summary, occurred_at
   FROM activity_events
@@ -342,9 +359,9 @@ sqlite3 -json "$DB" "
 
 ### Log a custom activity event
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+NOW=$(python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
 sqlite3 "$DB" "
   INSERT INTO activity_events (id, event_type, entity_type, summary, occurred_at)
   VALUES ('$ID', 'agent_action', 'task', 'Agent completed X', '$NOW')
@@ -411,11 +428,6 @@ openclaw cron runs <job-id>
 ## Models & config — openclaw CLI + direct file reads
 
 ### Get current agent config
-```bash
-cat ~/.openclaw/openclaw.json
-```
-
-### Get current model assignments
 ```python
 import json, os
 with open(os.path.expanduser("~/.openclaw/openclaw.json")) as f:
@@ -438,7 +450,7 @@ openclaw gateway status
 
 ### Full status report
 ```bash
-DB="$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db"
+DB=$(python3 -c "import os,sys; print(os.path.expanduser('~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db') if sys.platform=='darwin' else os.path.join(os.environ.get('APPDATA',''),'com.vpgs.clawdesk','clawdesk.db') if sys.platform=='win32' else os.path.expanduser('~/.local/share/com.vpgs.clawdesk/clawdesk.db'))")
 
 echo "=== OPEN TASKS ==="
 sqlite3 -json "$DB" "
@@ -462,8 +474,9 @@ openclaw gateway status
 
 ### "Add an urgent task"
 1. Generate UUID: `python3 -c "import uuid; print(uuid.uuid4())"`
-2. INSERT into tasks with `priority='urgent'`
-3. Report: "✅ Task created: [title]"
+2. Get DB path: use python3 DB detection snippet
+3. INSERT into tasks with `priority='urgent'`
+4. Report: "✅ Task created: [title]"
 
 ### "Show pending tasks / what's open"
 1. Query DB: `status NOT IN ('done','cancelled')`
@@ -481,7 +494,7 @@ openclaw gateway status
 4. Append to journal
 
 ### "What did the agent do today?"
-1. Read today's journal: `cat ~/.openclaw/workspace/memory/$(date +%Y-%m-%d).md`
+1. Read today's journal via python3
 2. Query recent activity: `SELECT event_type, summary, occurred_at FROM activity_events ORDER BY occurred_at DESC LIMIT 10`
 3. Compose summary
 
@@ -523,7 +536,10 @@ Keep responses concise and scannable. Use:
 
 ## Notes
 
-- ClawDesk DB: `~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db`
+- ClawDesk DB path: auto-detected by OS (see DB path section)
+  - macOS: `~/Library/Application Support/com.vpgs.clawdesk/clawdesk.db`
+  - Linux: `~/.local/share/com.vpgs.clawdesk/clawdesk.db`
+  - Windows: `%APPDATA%\com.vpgs.clawdesk\clawdesk.db`
 - OpenClaw config: `~/.openclaw/openclaw.json`
 - Cron jobs: `~/.openclaw/cron/jobs.json`
 - Memory files: `~/.openclaw/workspace/memory/YYYY-MM-DD.md`

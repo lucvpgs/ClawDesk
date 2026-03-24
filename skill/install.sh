@@ -1,18 +1,24 @@
 #!/bin/bash
 # Install ClawDesk skill for OpenClaw
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
+# macOS / Linux:  bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
+# Windows (PS):   see README — use Invoke-WebRequest one-liner
 
 set -e
 
-SKILL_DIR="$HOME/.openclaw/workspace/skills/clawdesk"
 SKILL_URL="https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/SKILL.md"
+
+# ── Detect OpenClaw workspace ─────────────────────────────────────────────────
+# OpenClaw always stores workspace under ~/.openclaw regardless of OS.
+# On Windows with Git Bash/WSL, $HOME resolves correctly.
+SKILL_DIR="$HOME/.openclaw/workspace/skills/clawdesk"
 CONFIG="$HOME/.openclaw/openclaw.json"
 
+# ── Download SKILL.md ─────────────────────────────────────────────────────────
 mkdir -p "$SKILL_DIR"
 curl -fsSL "$SKILL_URL" -o "$SKILL_DIR/SKILL.md"
 echo "✅ ClawDesk skill installed at $SKILL_DIR/SKILL.md"
 
-# Add 'clawdesk' to the main agent's skills list in openclaw.json if not already present
+# ── Add 'clawdesk' to agent skills list in openclaw.json ─────────────────────
 if [ -f "$CONFIG" ]; then
   python3 - "$CONFIG" <<'PY'
 import json, sys
