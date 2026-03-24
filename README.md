@@ -156,12 +156,12 @@ Tasks, projects and activity events created this way appear instantly in the UI.
 
 The `clawdesk` skill is installed automatically during onboarding. It gives your agent full access to tasks, schedules, models, memory and activity — directly from Discord, Telegram, or any other configured channel.
 
-To reinstall manually:
+To install or reinstall manually, run this one command:
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/clawdesk
-curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/SKILL.md \
-  -o ~/.openclaw/workspace/skills/clawdesk/SKILL.md
+bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
 ```
+
+> **Note:** `openclaw skills install` only works with ClawHub slugs — it does not accept GitHub URLs. Use the curl command above instead.
 
 Or install directly from ClawDesk → **Skills → Install from GitHub URL** by pasting:
 ```
