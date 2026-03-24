@@ -158,14 +158,15 @@ The `clawdesk` skill is installed automatically during onboarding. It gives your
 
 To reinstall manually:
 ```bash
-openclaw skills install --path ~/.openclaw/workspace/skills/clawdesk
+mkdir -p ~/.openclaw/workspace/skills/clawdesk
+curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/SKILL.md \
+  -o ~/.openclaw/workspace/skills/clawdesk/SKILL.md
 ```
 
-> **Note for cron agents:** OpenClaw's sandbox blocks `web_fetch` to `localhost` (SSRF policy). For read-only queries from cron jobs, use `sqlite3` on the ClawDesk database directly:
-> ```bash
-> sqlite3 "$HOME/Library/Application Support/com.vpgs.clawdesk/clawdesk.db" \
->   "SELECT count(*) FROM tasks WHERE status='pending'"
-> ```
+Or install directly from ClawDesk → **Skills → Install from GitHub URL** by pasting:
+```
+https://github.com/lucvpgs/ClawDesk
+```
 
 ---
 
