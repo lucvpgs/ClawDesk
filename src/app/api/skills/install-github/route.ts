@@ -45,13 +45,16 @@ function toRawUrls(input: string): string[] {
     return [`${prefix}/SKILL.md`];
   }
 
-  // https://github.com/user/repo  (bare repo — try main then master)
+  // https://github.com/user/repo  (bare repo — try common locations on main then master)
   const repoMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/?#]+)\/?(?:\?.*)?(?:#.*)?$/);
   if (repoMatch) {
     const [, user, repo] = repoMatch;
+    const base = `https://raw.githubusercontent.com/${user}/${repo}`;
     return [
-      `https://raw.githubusercontent.com/${user}/${repo}/main/SKILL.md`,
-      `https://raw.githubusercontent.com/${user}/${repo}/master/SKILL.md`,
+      `${base}/main/SKILL.md`,
+      `${base}/main/skill/SKILL.md`,
+      `${base}/master/SKILL.md`,
+      `${base}/master/skill/SKILL.md`,
     ];
   }
 
