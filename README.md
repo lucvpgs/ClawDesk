@@ -1,5 +1,13 @@
 # ClawDesk — Mission Control
 
+> **Installing the ClawDesk skill?** Run this one command:
+> ```bash
+> bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/skill/install.sh)
+> ```
+> ⚠️ `openclaw skills install <github-url>` does **not** work — use the curl command above.
+
+---
+
 A native desktop app for [OpenClaw](https://openclaw.ai) — manage your AI agents, tasks, schedules, models, channels, memory and costs from a single UI.
 
 ![Tauri](https://img.shields.io/badge/Tauri-v2-blue) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![SQLite](https://img.shields.io/badge/SQLite-local--first-blue) ![OpenClaw](https://img.shields.io/badge/OpenClaw-required-violet) ![License](https://img.shields.io/badge/license-BSL_1.1-orange)
