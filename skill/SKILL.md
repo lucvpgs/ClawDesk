@@ -56,10 +56,51 @@ After installation: tell the user to open ClawDesk from /Applications and comple
 
 ---
 
+## MCP Server (preferred method)
+
+ClawDesk ships with a built-in MCP server. When configured, you can manage tasks and projects via native MCP tools — no sqlite3, no HTTP, no SSRF issues.
+
+### Configure once in ~/.claude/settings.json
+
+```json
+{
+  "mcpServers": {
+    "clawdesk": {
+      "command": "node",
+      "args": [
+        "--experimental-strip-types",
+        "/Applications/ClawDesk.app/Contents/Resources/server/src/mcp/server.mts"
+      ]
+    }
+  }
+}
+```
+
+After adding this, restart your agent session. The following tools become available natively:
+
+| Tool | Description |
+|---|---|
+| `clawdesk_list_tasks` | List tasks, filter by project/status/agent |
+| `clawdesk_get_task` | Get task + full comment thread |
+| `clawdesk_create_task` | Create a new task |
+| `clawdesk_update_task` | Update status, priority, notes, proof |
+| `clawdesk_delete_task` | Delete a task |
+| `clawdesk_add_comment` | Add comment to a task |
+| `clawdesk_list_projects` | List all projects with task stats |
+| `clawdesk_get_project` | Get project + all its tasks |
+| `clawdesk_create_project` | Create a new project |
+| `clawdesk_list_agents` | List connected OpenClaw agents |
+| `clawdesk_get_overview` | Full dashboard overview |
+
+**Use MCP tools when available.** Fall back to sqlite3 only if MCP is not configured.
+
+---
+
 ## Architecture
 
-**Important:** The ClawDesk HTTP API at `http://localhost:3131` is inaccessible from agent sessions due to SSRF policy. All ClawDesk operations are performed via:
-- **sqlite3** — for all task/project/activity reads and writes
+**Note:** The ClawDesk HTTP API at `http://localhost:3131` is inaccessible from agent sessions due to SSRF policy. Use MCP (preferred) or direct DB/CLI access:
+- **MCP server** — preferred, native tool integration for tasks/projects/agents
+- **sqlite3** — fallback for task/project/activity reads and writes
 - **openclaw CLI** — for schedules, agents, models, and config
 - **python3 + file I/O** — for memory/journal reads and writes
 
@@ -69,7 +110,8 @@ User (Discord / Telegram / Slack / etc.)
      ▼
   Your primary agent (you)
      │  uses
-     ├── sqlite3              → ClawDesk DB (tasks, projects, activity)
+     ├── MCP (clawdesk_*)     → tasks, projects, agents (preferred)
+     ├── sqlite3              → fallback DB access
      ├── openclaw             → schedules, agents, models, gateway
      └── python3 + files      → memory/journal (~/.openclaw/workspace/memory/)
 

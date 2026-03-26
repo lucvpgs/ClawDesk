@@ -46,7 +46,20 @@ if (existsSync(staticSrc)) {
   process.exit(1);
 }
 
-// ── Step 1b: copy skill/ into standalone so the install route can find it ────
+// ── Step 1b: copy src/mcp/ into standalone so agents can launch the MCP server ─
+// The MCP server is launched via stdio by Claude Code / OpenClaw agents.
+// It must be present in the bundle at a stable path inside the .app.
+
+const mcpSrc = join(root, "src", "mcp");
+const mcpDst = join(standalone, "src", "mcp");
+if (existsSync(mcpSrc)) {
+  cpSync(mcpSrc, mcpDst, { recursive: true });
+  console.log("✅  Copied src/mcp/");
+} else {
+  console.warn("⚠️   src/mcp/ not found — MCP server will not be available in bundle");
+}
+
+// ── Step 1c: copy skill/ into standalone so the install route can find it ────
 // The install API reads skill/SKILL.md from process.cwd() at runtime.
 // process.cwd() in production = the standalone-bundle directory, so we must
 // include skill/ there.

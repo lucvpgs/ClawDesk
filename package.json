@@ -15,12 +15,14 @@
     "build:desktop": "next build && node scripts/copy-standalone-assets.mjs",
     "deploy:local": "pnpm build:desktop && rsync -a --delete .next/standalone-bundle/ /Applications/ClawDesk.app/Contents/Resources/server/ && codesign --force --deep --sign - /Applications/ClawDesk.app && echo '✅ Deployed to /Applications — restart ClawDesk'",
     "smoke-test": "node scripts/smoke-test-bundle.mjs",
-    "build:release": "pnpm build:desktop && pnpm smoke-test"
+    "build:release": "pnpm build:desktop && pnpm smoke-test",
+    "mcp": "node --experimental-strip-types src/mcp/server.mts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@tanstack/react-query": "^5.91.3",
     "better-sqlite3": "^12.8.0",
     "class-variance-authority": "^0.7.1",
@@ -34,6 +36,7 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.5.0",
     "ws": "^8.19.0",
+    "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
   "pnpm": {
