@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, X, RefreshCw, Circle, CheckCircle2, AlertCircle,
   ChevronDown, Save, CalendarClock, ExternalLink, Clock,
-  MessageSquare, Send, Trash2, User, Bot,
+  MessageSquare, Send, Trash2, User, Bot, XCircle, Link2, Timer,
 } from "lucide-react";
 import { ExportMenu } from "@/components/ExportMenu";
 import { cn, timeAgo } from "@/lib/utils";
@@ -27,7 +27,17 @@ interface Task {
   notes: string | null;
   dueAt: string | null;
   createdAt: string;
+  // state machine fields
+  dependencies: string | null;         // JSON array
+  requiresReview: boolean | null;
+  maxRetries: number | null;
+  retryCount: number | null;
+  nextTaskTemplate: string | null;     // JSON: { title, description?, priority?, assignedAgentId? }
+  // temporal tracking
+  startedAt: string | null;
   completedAt: string | null;
+  durationMs: number | null;
+  failedAt: string | null;
 }
 
 interface Project { id: string; name: string; status: string; }
@@ -38,41 +48,42 @@ const COLUMNS = [
   { key: "in_progress", label: "In Progress", dot: "bg-blue-400"    },
   { key: "review",      label: "Review",      dot: "bg-amber-400"   },
   { key: "done",        label: "Done",        dot: "bg-emerald-400" },
+  { key: "failed",      label: "Failed",      dot: "bg-red-500"     },
 ];
 
 // All valid statuses (for the detail panel selector)
 const ALL_STATUSES = [
   { key: "todo",             label: "Backlog"          },
-  { key: "ready",            label: "Ready"            },
   { key: "in_progress",      label: "In Progress"      },
-  { key: "waiting",          label: "Waiting"          },
-  { key: "blocked",          label: "Blocked"          },
   { key: "review",           label: "Review"           },
+  { key: "blocked",          label: "Blocked"          },
   { key: "done",             label: "Done"             },
-  { key: "alert",            label: "Alert"            },
+  { key: "failed",           label: "Failed"           },
+  { key: "cancelled",        label: "Cancelled"        },
   { key: "promoted_to_cron", label: "Promoted to Cron" },
-  { key: "archived",         label: "Archived"         },
 ];
 
 const STATUS_CHIP: Record<string, string> = {
   todo:             "bg-zinc-800 text-zinc-400 border-zinc-700",
-  ready:            "bg-sky-900/40 text-sky-300 border-sky-700/50",
   in_progress:      "bg-blue-900/40 text-blue-300 border-blue-700/50",
-  waiting:          "bg-zinc-800 text-zinc-400 border-zinc-700",
-  blocked:          "bg-red-900/40 text-red-300 border-red-700/50",
   review:           "bg-amber-900/40 text-amber-300 border-amber-700/50",
+  blocked:          "bg-red-900/40 text-red-300 border-red-700/50",
   done:             "bg-emerald-900/40 text-emerald-300 border-emerald-700/50",
-  alert:            "bg-red-900/60 text-red-200 border-red-600/50",
+  failed:           "bg-red-900/60 text-red-200 border-red-600/50",
+  cancelled:        "bg-zinc-900 text-zinc-600 border-zinc-800",
   promoted_to_cron: "bg-violet-900/40 text-violet-300 border-violet-700/50",
-  archived:         "bg-zinc-900 text-zinc-600 border-zinc-800",
 };
 
 const STATUS_LABEL: Record<string, string> = Object.fromEntries(ALL_STATUSES.map((s) => [s.key, s.label]));
 
 const NEXT_STATUS: Record<string, string> = {
-  todo: "in_progress", ready: "in_progress", in_progress: "review",
-  waiting: "in_progress", blocked: "in_progress", review: "done",
-  done: "todo", alert: "in_progress",
+  todo:        "in_progress",
+  in_progress: "review",
+  review:      "done",
+  blocked:     "in_progress",
+  failed:      "todo",
+  done:        "todo",
+  cancelled:   "todo",
 };
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -113,6 +124,8 @@ export default function TasksPage() {
     ? agentsData.agents
     : KNOWN_AGENTS.map((a) => ({ agentId: a.id, name: a.name }));
 
+  const [moveError, setMoveError] = useState<{ taskId: string; message: string } | null>(null);
+
   const createMutation = useMutation({
     mutationFn: (p: { title: string; priority: string; projectId?: string; status?: string }) =>
       fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then((r) => r.json()),
@@ -123,6 +136,15 @@ export default function TasksPage() {
     mutationFn: ({ id, ...u }: { id: string } & Record<string, unknown>) =>
       fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(u) }).then((r) => r.json()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+
+  // State machine move — enforces gates, retry, chaining
+  const moveMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      fetch(`/api/tasks/${id}/move`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) })
+        .then(async (r) => { const d = await r.json(); if (!r.ok) throw d; return d; }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tasks"] }); setMoveError(null); },
+    onError: (err: { error: string }, vars) => setMoveError({ taskId: vars.id, message: (err as { error: string }).error }),
   });
 
   const deleteMutation = useMutation({
@@ -152,13 +174,16 @@ export default function TasksPage() {
     return true;
   });
 
-  // Group tasks into kanban columns — non-column statuses go into closest column
+  // Group tasks into kanban columns
   const statusToColumn: Record<string, string> = {
-    todo: "todo", ready: "todo", new: "todo",
-    in_progress: "in_progress", waiting: "in_progress",
-    blocked: "in_progress", alert: "in_progress",
-    review: "review",
-    done: "done", promoted_to_cron: "done", archived: "done",
+    todo:             "todo",
+    in_progress:      "in_progress",
+    blocked:          "in_progress",
+    review:           "review",
+    done:             "done",
+    promoted_to_cron: "done",
+    failed:           "failed",
+    cancelled:        "failed",
   };
   const byStatus = COLUMNS.reduce((acc, col) => {
     acc[col.key] = filtered.filter((t) => (statusToColumn[t.status] ?? "todo") === col.key);
@@ -304,7 +329,9 @@ export default function TasksPage() {
                           key={task.id}
                           task={task}
                           project={proj ?? null}
-                          onStatusChange={(s) => updateMutation.mutate({ id: task.id, status: s })}
+                          moveError={moveError?.taskId === task.id ? moveError.message : null}
+                          onMoveError={() => setMoveError(null)}
+                          onAdvance={() => moveMutation.mutate({ id: task.id, status: NEXT_STATUS[task.status] ?? "todo" })}
                           onDelete={() => deleteMutation.mutate(task.id)}
                           onOpenDetail={() => setDetailTaskId(task.id)}
                         />
@@ -324,8 +351,10 @@ export default function TasksPage() {
           task={detailTask}
           projects={projects}
           agents={agentList}
+          allTasks={allTasks}
           onClose={() => setDetailTaskId(null)}
           onUpdate={(u) => updateMutation.mutate({ id: detailTask.id, ...u })}
+          onMove={(s) => moveMutation.mutate({ id: detailTask.id, status: s })}
           onDelete={() => deleteMutation.mutate(detailTask.id)}
           onPromoteToCron={() => { setCronTaskId(detailTask.id); }}
         />
@@ -351,16 +380,19 @@ export default function TasksPage() {
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 function TaskCard({
-  task, project, onStatusChange, onDelete, onOpenDetail,
+  task, project, moveError, onMoveError, onAdvance, onDelete, onOpenDetail,
 }: {
   task: Task;
   project: Project | null;
-  onStatusChange: (s: string) => void;
+  moveError: string | null;
+  onMoveError: () => void;
+  onAdvance: () => void;
   onDelete: () => void;
   onOpenDetail: () => void;
 }) {
   const agentColor = agentAccent(task.assignedAgentId);
   const projColor  = projectAccent(task.projectId);
+  const deps: string[] = JSON.parse(task.dependencies ?? "[]");
 
   return (
     <div className={cn(
@@ -372,9 +404,9 @@ function TaskCard({
         {/* Title + actions */}
         <div className="flex items-start gap-2">
           <button
-            onClick={() => onStatusChange(NEXT_STATUS[task.status] ?? "todo")}
+            onClick={onAdvance}
             className="mt-0.5 shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
-            title="Advance status"
+            title={`Advance → ${NEXT_STATUS[task.status] ?? "todo"}`}
           >
             <StatusIcon status={task.status} />
           </button>
@@ -382,7 +414,7 @@ function TaskCard({
             onClick={onOpenDetail}
             className={cn(
               "text-xs text-left flex-1 leading-snug font-medium",
-              task.status === "done" || task.status === "archived"
+              task.status === "done" || task.status === "cancelled"
                 ? "line-through text-zinc-600"
                 : "text-zinc-100 hover:text-white"
             )}
@@ -399,6 +431,17 @@ function TaskCard({
           </div>
         </div>
 
+        {/* Gate error */}
+        {moveError && (
+          <div className="ml-5 flex items-start gap-1.5 bg-red-950/40 border border-red-800/40 rounded px-2 py-1.5">
+            <AlertCircle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-red-300 flex-1 leading-relaxed">{moveError}</p>
+            <button onClick={onMoveError} className="text-red-700 hover:text-red-400 shrink-0">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
         {/* Description preview */}
         {task.description && (
           <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2 ml-5">
@@ -408,7 +451,6 @@ function TaskCard({
 
         {/* Footer */}
         <div className="flex items-center gap-2 ml-5 flex-wrap">
-          {/* Agent avatar */}
           {task.assignedAgentId && (
             <span
               className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 text-zinc-900", agentColor.avatar)}
@@ -417,28 +459,31 @@ function TaskCard({
               {agentInitial(task.assignedAgentId)}
             </span>
           )}
-
-          {/* Project badge */}
           {project && (
             <span className={cn("text-[10px] px-1.5 py-0.5 rounded", projColor.badge)}>
               {project.name}
             </span>
           )}
-
-          {/* Status chip (only if non-default for this column) */}
-          {!["todo", "in_progress", "review", "done"].includes(task.status) && (
+          {!["todo", "in_progress", "review", "done", "failed"].includes(task.status) && (
             <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", STATUS_CHIP[task.status] ?? STATUS_CHIP.todo)}>
               {STATUS_LABEL[task.status] ?? task.status}
             </span>
           )}
-
-          {/* Cron link */}
+          {deps.length > 0 && (
+            <span className="text-[10px] text-zinc-600" title={`${deps.length} dependencies`}>
+              <Link2 className="w-3 h-3 inline" /> {deps.length}
+            </span>
+          )}
+          {task.requiresReview && (
+            <span className="text-[10px] text-amber-600" title="Requires review before done">
+              ✓ review
+            </span>
+          )}
           {task.linkedCronJobId && (
             <span className="text-[10px] text-violet-400" title="Linked to cron job">
               <CalendarClock className="w-3 h-3 inline" />
             </span>
           )}
-
           <span className={cn("text-[10px] ml-auto shrink-0", PRIORITY_COLOR[task.priority])}>
             {task.priority}
           </span>
@@ -451,28 +496,43 @@ function TaskCard({
 
 // ── Task Detail Panel ─────────────────────────────────────────────────────────
 function TaskDetailPanel({
-  task, projects, agents, onClose, onUpdate, onDelete, onPromoteToCron,
+  task, projects, agents, allTasks, onClose, onUpdate, onMove, onDelete, onPromoteToCron,
 }: {
   task: Task;
   projects: Project[];
   agents: RuntimeAgent[];
+  allTasks: Task[];
   onClose: () => void;
   onUpdate: (u: Record<string, unknown>) => void;
+  onMove: (status: string) => void;
   onDelete: () => void;
   onPromoteToCron: () => void;
 }) {
-  const [title, setTitle]       = useState(task.title);
-  const [desc, setDesc]         = useState(task.description ?? "");
-  const [status, setStatus]     = useState(task.status);
-  const [priority, setPriority] = useState(task.priority);
-  const [agentId, setAgentId]   = useState(task.assignedAgentId ?? "");
-  const [projectId, setProjectId] = useState(task.projectId ?? "");
-  const [proof, setProof]       = useState((task as Task & { proof?: string | null }).proof ?? "");
-  const [notes, setNotes]       = useState((task as Task & { notes?: string | null }).notes ?? "");
-  const [dueAt, setDueAt]       = useState(task.dueAt ?? "");
-  const [saving, setSaving]     = useState(false);
-  const [newComment, setNewComment] = useState("");
+  const [title, setTitle]             = useState(task.title);
+  const [desc, setDesc]               = useState(task.description ?? "");
+  const [status, setStatus]           = useState(task.status);
+  const [priority, setPriority]       = useState(task.priority);
+  const [agentId, setAgentId]         = useState(task.assignedAgentId ?? "");
+  const [projectId, setProjectId]     = useState(task.projectId ?? "");
+  const [proof, setProof]             = useState(task.proof ?? "");
+  const [notes, setNotes]             = useState(task.notes ?? "");
+  const [dueAt, setDueAt]             = useState(task.dueAt ?? "");
+  const [requiresReview, setRequiresReview] = useState(task.requiresReview ?? false);
+  const [maxRetries, setMaxRetries]   = useState(task.maxRetries ?? 2);
+  const [nextTitle, setNextTitle]     = useState(() => {
+    try { return task.nextTaskTemplate ? JSON.parse(task.nextTaskTemplate).title ?? "" : ""; } catch { return ""; }
+  });
+  const [nextPriority, setNextPriority] = useState(() => {
+    try { return task.nextTaskTemplate ? JSON.parse(task.nextTaskTemplate).priority ?? "medium" : "medium"; } catch { return "medium"; }
+  });
+  const [depSearch, setDepSearch]     = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [newComment, setNewComment]   = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  const [moveErr, setMoveErr]         = useState<string | null>(null);
+
+  const deps: string[] = JSON.parse(task.dependencies ?? "[]");
+  const depTasks = deps.map((id) => allTasks.find((t) => t.id === id)).filter(Boolean) as Task[];
 
   const qcLocal = useQueryClient();
 
@@ -510,18 +570,45 @@ function TaskDetailPanel({
 
   const handleSave = async () => {
     setSaving(true);
+    const nextTaskTemplate = nextTitle.trim()
+      ? JSON.stringify({ title: nextTitle.trim(), priority: nextPriority })
+      : null;
     await onUpdate({
-      title:           title || task.title,
-      description:     desc || null,
+      title:            title || task.title,
+      description:      desc || null,
       status,
       priority,
-      assignedAgentId: agentId || null,
-      projectId:       projectId || null,
-      proof:           proof || null,
-      notes:           notes || null,
-      dueAt:           dueAt || null,
+      assignedAgentId:  agentId || null,
+      projectId:        projectId || null,
+      proof:            proof || null,
+      notes:            notes || null,
+      dueAt:            dueAt || null,
+      requiresReview,
+      maxRetries,
+      nextTaskTemplate,
     });
     setSaving(false);
+  };
+
+  const handleMove = async (s: string) => {
+    setMoveErr(null);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const p = fetch(`/api/tasks/${task.id}/move`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: s }),
+        }).then(async (r) => {
+          const d = await r.json();
+          if (!r.ok) reject(d);
+          else resolve();
+        });
+        void p;
+      });
+      onMove(s);
+    } catch (e: unknown) {
+      setMoveErr((e as { error?: string }).error ?? "Move failed");
+    }
   };
 
   const canPromote = !["promoted_to_cron", "archived", "done"].includes(task.status);
@@ -559,6 +646,34 @@ function TaskDetailPanel({
 
         {/* Body */}
         <div className="flex-1 px-5 py-4 space-y-4">
+
+          {/* Move error */}
+          {moveErr && (
+            <div className="flex items-start gap-2 bg-red-950/40 border border-red-800/40 rounded-lg px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-300 flex-1">{moveErr}</p>
+              <button onClick={() => setMoveErr(null)}><X className="w-3.5 h-3.5 text-red-700 hover:text-red-400" /></button>
+            </div>
+          )}
+
+          {/* Quick move buttons */}
+          <div>
+            <label className="text-[10px] text-zinc-600 uppercase tracking-wider">Move to</label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {ALL_STATUSES.filter((s) => s.key !== task.status).map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => handleMove(s.key)}
+                  className={cn(
+                    "px-2.5 py-1 text-[10px] rounded border transition-colors",
+                    "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Status + Priority row */}
           <div className="grid grid-cols-2 gap-3">
@@ -665,10 +780,123 @@ function TaskDetailPanel({
             <p className="text-[10px] text-zinc-700 mt-1">Required to mark task as Done.</p>
           </div>
 
+          {/* State machine settings */}
+          <div className="space-y-3 pt-1 border-t border-zinc-800">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider pt-1">State machine</p>
+
+            {/* requiresReview + maxRetries */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between bg-zinc-900/60 rounded-lg px-3 py-2">
+                <div>
+                  <p className="text-xs text-zinc-300">Requires review</p>
+                  <p className="text-[10px] text-zinc-600">Gate before done</p>
+                </div>
+                <button
+                  onClick={() => setRequiresReview(!requiresReview)}
+                  className={cn(
+                    "relative w-9 h-5 rounded-full border transition-colors shrink-0",
+                    requiresReview ? "bg-amber-600 border-amber-500" : "bg-zinc-800 border-zinc-700"
+                  )}
+                >
+                  <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all", requiresReview ? "left-4" : "left-0.5")} />
+                </button>
+              </div>
+              <div className="bg-zinc-900/60 rounded-lg px-3 py-2">
+                <p className="text-xs text-zinc-300">Max retries</p>
+                <input
+                  type="number"
+                  min={0} max={10}
+                  className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 outline-none"
+                  value={maxRetries}
+                  onChange={(e) => setMaxRetries(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            {/* Dependencies */}
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-wider">Dependencies</label>
+              {depTasks.length > 0 && (
+                <div className="mt-1 space-y-1">
+                  {depTasks.map((d) => (
+                    <div key={d.id} className="flex items-center gap-2 bg-zinc-900/60 rounded px-2.5 py-1.5">
+                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_CHIP[d.status]?.includes("emerald") ? "bg-emerald-400" : "bg-zinc-500")} />
+                      <span className="text-[11px] text-zinc-300 flex-1 truncate">{d.title}</span>
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", STATUS_CHIP[d.status] ?? STATUS_CHIP.todo)}>{STATUS_LABEL[d.status] ?? d.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input
+                className="w-full mt-1.5 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600 placeholder:text-zinc-700"
+                placeholder="Search tasks to add as dependency…"
+                value={depSearch}
+                onChange={(e) => setDepSearch(e.target.value)}
+              />
+              {depSearch && (
+                <div className="mt-1 border border-zinc-800 rounded-lg overflow-hidden max-h-32 overflow-y-auto">
+                  {allTasks
+                    .filter((t) => t.id !== task.id && !deps.includes(t.id) && t.title.toLowerCase().includes(depSearch.toLowerCase()))
+                    .slice(0, 5)
+                    .map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          const newDeps = JSON.stringify([...deps, t.id]);
+                          onUpdate({ dependencies: newDeps });
+                          setDepSearch("");
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors text-left"
+                      >
+                        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", "bg-zinc-500")} />
+                        {t.title}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Next task template */}
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-wider">Chain: next task on completion</label>
+              <input
+                className="w-full mt-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600 placeholder:text-zinc-700"
+                placeholder="Next task title (leave empty to disable chaining)"
+                value={nextTitle}
+                onChange={(e) => setNextTitle(e.target.value)}
+              />
+              {nextTitle && (
+                <select
+                  className="w-full mt-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 outline-none"
+                  value={nextPriority}
+                  onChange={(e) => setNextPriority(e.target.value)}
+                >
+                  {["low","medium","high","urgent"].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+
           {/* Metadata */}
           <div className="bg-zinc-900/50 rounded-lg px-3 py-2.5 space-y-1.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Timer className="w-3 h-3 text-zinc-600" />
+              <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Tracking</span>
+            </div>
             <MetaRow label="Created"   value={new Date(task.createdAt).toLocaleString()} />
+            {task.startedAt   && <MetaRow label="Started"   value={new Date(task.startedAt).toLocaleString()} />}
             {task.completedAt && <MetaRow label="Completed" value={new Date(task.completedAt).toLocaleString()} />}
+            {task.failedAt    && <MetaRow label="Failed"    value={new Date(task.failedAt).toLocaleString()} />}
+            {task.durationMs  != null && (
+              <MetaRow label="Duration" value={
+                task.durationMs < 60000
+                  ? `${Math.round(task.durationMs / 1000)}s`
+                  : task.durationMs < 3600000
+                  ? `${Math.round(task.durationMs / 60000)}m`
+                  : `${(task.durationMs / 3600000).toFixed(1)}h`
+              } />
+            )}
+            {(task.retryCount ?? 0) > 0 && <MetaRow label="Retries" value={`${task.retryCount} / ${task.maxRetries ?? 2}`} />}
             {task.linkedCronJobId && <MetaRow label="Cron job" value={task.linkedCronJobId} mono />}
             {task.linkedSessionId && <MetaRow label="Session"  value={task.linkedSessionId} mono />}
           </div>
@@ -1007,8 +1235,9 @@ function StatPill({ label, value, cls }: { label: string; value: string | number
 function StatusIcon({ status }: { status: string }) {
   const c = "w-3.5 h-3.5";
   if (status === "done" || status === "promoted_to_cron") return <CheckCircle2 className={cn(c, "text-emerald-400")} />;
-  if (status === "blocked" || status === "alert")          return <AlertCircle  className={cn(c, "text-red-400")}    />;
-  if (status === "in_progress" || status === "review")     return <RefreshCw    className={cn(c, "text-blue-400")}   />;
+  if (status === "failed")                                return <XCircle      className={cn(c, "text-red-500")}     />;
+  if (status === "blocked")                               return <AlertCircle  className={cn(c, "text-red-400")}     />;
+  if (status === "in_progress" || status === "review")    return <RefreshCw    className={cn(c, "text-blue-400")}    />;
   return <Circle className={cn(c, "text-zinc-600")} />;
 }
 
