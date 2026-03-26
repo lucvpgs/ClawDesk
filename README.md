@@ -67,57 +67,37 @@ A native desktop app for [OpenClaw](https://openclaw.ai) — manage your AI agen
 
 ## Install
 
-### macOS — Build from source
-
-Requires: **Node.js 18+**, **pnpm**, **Rust** (via [rustup](https://rustup.rs)).
+### macOS — one command
 
 ```bash
-git clone https://github.com/lucvpgs/ClawDesk.git
-cd ClawDesk
-pnpm install
-pnpm build:desktop
-
-APP_SRC="src-tauri/target/release/bundle/macos/ClawDesk.app"
-rm -rf /Applications/ClawDesk.app
-ditto "$APP_SRC" /Applications/ClawDesk.app
-xattr -cr /Applications/ClawDesk.app
-codesign --force --deep --sign - /Applications/ClawDesk.app
+bash <(curl -fsSL https://raw.githubusercontent.com/lucvpgs/ClawDesk/main/install.sh)
 ```
+
+This downloads the latest `.dmg` from GitHub Releases, installs `ClawDesk.app` to `/Applications`, and re-signs it for local use. No Xcode, no Rust, no build tools required.
 
 Open **ClawDesk** from `/Applications` or Spotlight.
 
-> **Why `ditto` and `codesign`?**
-> `ditto` preserves resource forks and code signatures. `codesign` re-signs for local distribution without an Apple Developer certificate.
+### Linux
 
-### Linux — Build from source
+Download the latest `.deb` or `.AppImage` from [GitHub Releases](https://github.com/lucvpgs/ClawDesk/releases/latest).
 
-**Debian/Ubuntu:**
 ```bash
-sudo apt update && sudo apt install -y \
-  libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev \
-  libayatana-appindicator3-dev librsvg2-dev build-essential curl
+# Debian / Ubuntu
+sudo dpkg -i clawdesk_*.deb
+
+# AppImage
+chmod +x clawdesk_*.AppImage && ./clawdesk_*.AppImage
 ```
 
-**Fedora:**
-```bash
-sudo dnf install -y webkit2gtk4.1-devel openssl-devel gtk3-devel \
-  libappindicator-gtk3-devel librsvg2-devel
-```
+### Build from source
+
+Only needed for development or unsupported platforms. Requires Node.js 18+, pnpm, Rust.
 
 ```bash
 git clone https://github.com/lucvpgs/ClawDesk.git
 cd ClawDesk
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh && source ~/.cargo/env
-npm install -g pnpm
 pnpm install
 pnpm build:desktop
-
-# Install .deb
-sudo dpkg -i src-tauri/target/release/bundle/deb/clawdesk_*.deb
-
-# Or use AppImage
-chmod +x src-tauri/target/release/bundle/appimage/clawdesk_*.AppImage
-./src-tauri/target/release/bundle/appimage/clawdesk_*.AppImage
 ```
 
 ---
