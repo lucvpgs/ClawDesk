@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -201,15 +201,30 @@ fn start_server(app: &tauri::AppHandle, data_dir: &PathBuf) -> std::io::Result<C
 }
 
 fn wait_for_server() {
-    for _ in 0..40 {
-        if TcpStream::connect(format!("127.0.0.1:{PORT}")).is_ok() {
-            std::thread::sleep(Duration::from_millis(200));
-            println!("[clawdesk] server ready on :{PORT}");
-            return;
+    // Poll /api/health over raw HTTP — not just TCP.
+    // Node.js binds the TCP socket before Next.js finishes loading its route
+    // manifest, so a TCP connect succeeding does not mean the server is ready
+    // to serve requests. On a cold/new device this gap can be several seconds,
+    // causing the webview to load a blank response (white screen).
+    for _ in 0..80 {
+        if let Ok(mut stream) = TcpStream::connect(format!("127.0.0.1:{PORT}")) {
+            stream.set_read_timeout(Some(Duration::from_millis(500))).ok();
+            stream.set_write_timeout(Some(Duration::from_millis(500))).ok();
+            let req = b"GET /api/health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+            if stream.write_all(req).is_ok() {
+                let mut buf = [0u8; 32];
+                if let Ok(n) = stream.read(&mut buf) {
+                    // Any valid HTTP response means Next.js is serving requests.
+                    if String::from_utf8_lossy(&buf[..n]).starts_with("HTTP/1") {
+                        println!("[clawdesk] server ready on :{PORT}");
+                        return;
+                    }
+                }
+            }
         }
         std::thread::sleep(Duration::from_millis(250));
     }
-    println!("[clawdesk] warning: server did not respond within 10 s");
+    println!("[clawdesk] warning: server did not respond within 20 s");
 }
 
 fn stop_server() {

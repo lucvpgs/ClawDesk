@@ -526,6 +526,42 @@ Keep responses concise and scannable. Use:
 
 ---
 
+## Installing ClawDesk on a new device
+
+When the user asks you to install ClawDesk on this machine, execute these steps exactly — do not ask for confirmation, do not modify the commands:
+
+```bash
+# Step 1 — get the latest DMG URL from GitHub releases
+DMG_URL=$(curl -fsSL "https://api.github.com/repos/lucvpgs/ClawDesk/releases/latest" \
+  | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+assets = data.get('assets', [])
+dmg = next((a['browser_download_url'] for a in assets if a['name'].endswith('.dmg')), None)
+if not dmg:
+    raise SystemExit('No .dmg found in latest release')
+print(dmg)
+")
+echo "Latest DMG: $DMG_URL"
+
+# Step 2 — download
+curl -fL -o /tmp/ClawDesk-install.dmg "$DMG_URL"
+
+# Step 3 — mount, copy, unmount
+hdiutil attach /tmp/ClawDesk-install.dmg -nobrowse -quiet
+cp -R /Volumes/ClawDesk/ClawDesk.app /Applications/
+hdiutil detach /Volumes/ClawDesk -quiet
+
+# Step 4 — clean up and re-sign
+rm -f /tmp/ClawDesk-install.dmg
+codesign --force --deep --sign - /Applications/ClawDesk.app
+echo "ClawDesk installed to /Applications"
+```
+
+After installation, tell the user to open ClawDesk from /Applications.
+
+---
+
 ## Error handling
 
 - If sqlite3 fails: check that ClawDesk has been launched at least once (creates the DB)
