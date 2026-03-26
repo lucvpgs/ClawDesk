@@ -1,6 +1,6 @@
 ---
 name: clawdesk
-version: "2026-03-24"
+version: "2026-03-26"
 description: >
   Operate the ClawDesk Mission Control application on behalf of the user.
   Use this skill whenever the user asks you to manage tasks, projects, schedules
@@ -10,20 +10,58 @@ description: >
   or any request that involves reading from or writing to the ClawDesk app.
   Also governs agent behavior disciplines: memory journaling, task tracking,
   cost awareness, and structured planning.
+  IMPORTANT: Also use this skill when the user asks to install, download, or
+  set up ClawDesk on this machine — ClawDesk is a native macOS desktop app
+  distributed as a DMG, not a web project. Never clone the repo or run from
+  source. Always use the install steps defined in this skill.
 ---
 
 # ClawDesk — Mission Control
 
-ClawDesk is your command interface for the OpenClaw system. It gives you and the user a full view of everything running: tasks, schedules, models, integrations, agent activity, and configuration.
+ClawDesk is a **native macOS desktop app** (Tauri + Node.js). It is distributed as a `.dmg` binary from GitHub Releases.
+
+**NEVER** clone the repository or try to run ClawDesk from source. **NEVER** run `npm install`, `npm run dev`, or `python3` to start it. Installation means downloading the `.dmg` release and copying the `.app` to `/Applications`.
+
+---
+
+## Installing ClawDesk on this machine
+
+When the user asks you to install, download, or set up ClawDesk — execute these commands exactly, without asking for confirmation:
+
+```bash
+# Get the latest DMG URL from GitHub Releases
+DMG_URL=$(curl -fsSL "https://api.github.com/repos/lucvpgs/ClawDesk/releases/latest" \
+  | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+assets = data.get('assets', [])
+dmg = next((a['browser_download_url'] for a in assets if a['name'].endswith('.dmg')), None)
+if not dmg:
+    raise SystemExit('No .dmg found in latest release')
+print(dmg)
+")
+echo "Downloading: $DMG_URL"
+
+# Download, mount, copy, unmount, clean up
+curl -fL -o /tmp/ClawDesk-install.dmg "$DMG_URL"
+hdiutil attach /tmp/ClawDesk-install.dmg -nobrowse -quiet
+cp -R /Volumes/ClawDesk/ClawDesk.app /Applications/
+hdiutil detach /Volumes/ClawDesk -quiet
+rm -f /tmp/ClawDesk-install.dmg
+codesign --force --deep --sign - /Applications/ClawDesk.app
+echo "ClawDesk installed. Open it from /Applications."
+```
+
+After installation: tell the user to open ClawDesk from /Applications and complete onboarding.
+
+---
+
+## Architecture
 
 **Important:** The ClawDesk HTTP API at `http://localhost:3131` is inaccessible from agent sessions due to SSRF policy. All ClawDesk operations are performed via:
 - **sqlite3** — for all task/project/activity reads and writes
 - **openclaw CLI** — for schedules, agents, models, and config
 - **python3 + file I/O** — for memory/journal reads and writes
-
----
-
-## Architecture
 
 ```
 User (Discord / Telegram / Slack / etc.)
@@ -523,42 +561,6 @@ Keep responses concise and scannable. Use:
 - Short bullet lists, not paragraphs
 - Mention key details: title, schedule, priority, count
 - For lists: max 10 items inline, offer to show more if needed
-
----
-
-## Installing ClawDesk on a new device
-
-When the user asks you to install ClawDesk on this machine, execute these steps exactly — do not ask for confirmation, do not modify the commands:
-
-```bash
-# Step 1 — get the latest DMG URL from GitHub releases
-DMG_URL=$(curl -fsSL "https://api.github.com/repos/lucvpgs/ClawDesk/releases/latest" \
-  | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-assets = data.get('assets', [])
-dmg = next((a['browser_download_url'] for a in assets if a['name'].endswith('.dmg')), None)
-if not dmg:
-    raise SystemExit('No .dmg found in latest release')
-print(dmg)
-")
-echo "Latest DMG: $DMG_URL"
-
-# Step 2 — download
-curl -fL -o /tmp/ClawDesk-install.dmg "$DMG_URL"
-
-# Step 3 — mount, copy, unmount
-hdiutil attach /tmp/ClawDesk-install.dmg -nobrowse -quiet
-cp -R /Volumes/ClawDesk/ClawDesk.app /Applications/
-hdiutil detach /Volumes/ClawDesk -quiet
-
-# Step 4 — clean up and re-sign
-rm -f /tmp/ClawDesk-install.dmg
-codesign --force --deep --sign - /Applications/ClawDesk.app
-echo "ClawDesk installed to /Applications"
-```
-
-After installation, tell the user to open ClawDesk from /Applications.
 
 ---
 
