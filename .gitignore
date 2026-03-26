@@ -42,3 +42,8 @@ src-tauri/app-icon-source.png
 dist-release/
 *.app.tar.gz
 *.app.tar.gz.sig
+
+# License key generator — keep offline, never commit
+scripts/generate-keys.mjs
+scripts/gen-license.mjs
+scripts/KEYS.md
