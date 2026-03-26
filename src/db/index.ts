@@ -152,6 +152,16 @@ function ensureTables(sqlite: Database.Database) {
   const alterCols = [
     "ALTER TABLE tasks ADD COLUMN proof TEXT",
     "ALTER TABLE tasks ADD COLUMN notes TEXT",
+    // State machine
+    "ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'",
+    "ALTER TABLE tasks ADD COLUMN requires_review INTEGER DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN max_retries INTEGER DEFAULT 2",
+    "ALTER TABLE tasks ADD COLUMN retry_count INTEGER DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN next_task_template TEXT",
+    // Temporal tracking
+    "ALTER TABLE tasks ADD COLUMN started_at TEXT",
+    "ALTER TABLE tasks ADD COLUMN duration_ms INTEGER",
+    "ALTER TABLE tasks ADD COLUMN failed_at TEXT",
   ];
   for (const sql of alterCols) {
     try { sqlite.exec(sql); } catch { /* column already exists */ }

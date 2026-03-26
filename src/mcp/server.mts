@@ -131,6 +131,19 @@ server.tool(
 );
 
 server.tool(
+  "clawdesk_move_task",
+  "Move a task through the state machine. Enforces dependency gates, quality gates, auto-retry on failure, and spawns chained tasks on completion. Statuses: todo | in_progress | review | blocked | done | failed | cancelled",
+  {
+    id: z.string(),
+    status: z.enum(["todo", "in_progress", "review", "blocked", "done", "failed", "cancelled"]),
+  },
+  async ({ id, status }) => {
+    const data = await api<unknown>("POST", `/api/tasks/${id}/move`, { status });
+    return ok(data);
+  }
+);
+
+server.tool(
   "clawdesk_delete_task",
   "Delete a task by ID.",
   { id: z.string() },

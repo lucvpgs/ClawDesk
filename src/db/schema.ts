@@ -102,13 +102,27 @@ export const tasks = sqliteTable("tasks", {
   runtimeSourceId: text("runtime_source_id"),
   title: text("title").notNull(),
   description: text("description"),
-  status: text("status").notNull().default("todo"), // todo | in_progress | blocked | done | cancelled
+  // todo | in_progress | review | blocked | done | failed | cancelled
+  status: text("status").notNull().default("todo"),
   priority: text("priority").notNull().default("medium"), // low | medium | high | urgent
   assignedAgentId: text("assigned_agent_id"),
   linkedSessionId: text("linked_session_id"),
   linkedCronJobId: text("linked_cron_job_id"),
   dueAt: text("due_at"),
+  // ── State machine ─────────────────────────────────────────────────────────
+  dependencies: text("dependencies").default("[]"),       // JSON: string[] of task IDs
+  requiresReview: integer("requires_review", { mode: "boolean" }).default(false),
+  maxRetries: integer("max_retries").default(2),
+  retryCount: integer("retry_count").default(0),
+  nextTaskTemplate: text("next_task_template"),           // JSON: { title, description?, priority?, assignedAgentId? }
+  // ── Temporal tracking ─────────────────────────────────────────────────────
+  startedAt: text("started_at"),
   completedAt: text("completed_at"),
+  durationMs: integer("duration_ms"),
+  failedAt: text("failed_at"),
+  // ─────────────────────────────────────────────────────────────────────────
+  proof: text("proof"),
+  notes: text("notes"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
