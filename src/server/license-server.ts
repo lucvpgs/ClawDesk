@@ -7,7 +7,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 
-const SECRET = process.env.CLAWDESK_LICENSE_SECRET ?? "85629d47cb9dbd04e7c41e52867e87bbeecd15a8b4fffb0b";
+const SECRET = process.env.CLAWDESK_LICENSE_SECRET ?? "dev-only";
 const CLAWDESK_JSON = path.join(homedir(), ".openclaw", "clawdesk.json");
 
 function hmac4(payload: string): string {
